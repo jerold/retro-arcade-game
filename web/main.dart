@@ -6,33 +6,29 @@ const board_y = 24; // standard board height
 const board_x = 10; // standard board width
 final rand = Random();
 
-var _b = filledBoard(0);
+const tick_ms = 400;
+const empty_value = 0;
+const shadow_value = -1; // 0 is empty, 1-7 for a piece, and -1 for shadow
+
+var _b = emptyBoard();
 var _q = <int>[];
+
+// lines that should be cleaned up
+var _tetrisLines = <int>[];
 
 int get _i => _q.first;
 int _y;
 int _x;
 int _r;
 
-Element _backgroundElement;
+bool paused = false;
+
 Element _boardElement;
-Element _maskElement;
-Element _optimisticElement;
 
 void main() {
   document.body.onKeyDown.listen(_onKeyDown);
-
-  _backgroundElement = querySelector('#background');
   _boardElement = querySelector('#tetris');
-  _maskElement = querySelector('#mask');
-  _optimisticElement = querySelector('#optimistic');
-  _setBackground();
-
   _start();
-}
-
-void _setBackground() async {
-  _backgroundElement.innerHtml = boardAsInnerHtml(_b);
 }
 
 void _paint() async {
@@ -40,18 +36,25 @@ void _paint() async {
   while (isValid(_x, _y + dy, _r, _i, _b)) {
     dy++;
   }
-  final optimisticMask = pieceMask(_x, _y + dy - 1, _r, _i);
-  _optimisticElement.innerHtml = boardAsInnerHtml(optimisticMask);
-
-  _boardElement.innerHtml = boardAsInnerHtml(_b);
-
-  final mask = pieceMask(_x, _y, _r, _i);
-  _maskElement.innerHtml = boardAsInnerHtml(mask);
+  var composite = merged(_b, boardCopy(pieceMask(_x, _y + dy - 1, _r, _i), shadow: true));
+  composite = merged(composite, pieceMask(_x, _y, _r, _i));
+  _boardElement.innerHtml = boardAsInnerHtml(composite);
 }
 
 String boardAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
 
-String pixelAsInnerHtml(int pixel) => '<div class="pixel shape-$pixel"></div>';
+String pixelAsInnerHtml(int pixel) => '<div class="pixel ${pixelClassName(pixel)}"></div>';
+
+String pixelClassName(int pixel) {
+  switch(pixel) {
+    case 0:
+      return 'empty';
+    case -1:
+      return 'shadow';
+    default:
+      return 'piece-${pixel}';
+  }
+}
 
 void _resetPieceTransforms() {
   _r = 0;
@@ -72,24 +75,26 @@ void _start() async {
 
 Timer _tickTimer;
 void _scheduleTick() async {
-  _tickTimer = Timer(Duration(milliseconds: 500), _tick);
+  _tickTimer = Timer(Duration(milliseconds: tick_ms), _tick);
 }
 
 void _reset() {
-  _b = filledBoard(0);
+  _b = emptyBoard();
 }
 
 void _tick() async {
   _tickTimer?.cancel();
+  _cleanUpFormerTetrisLines();
   if (isValid(_x, _y + 1, _r, _i, _b)) {
     _y++;
   } else {
     _b = boardWithPiece(_x, _y, _r, _i, _b);
+    _removeTetrisLines();
     _popPieceFromQueue();
     _addPieceToQueue();
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
-      _b = filledBoard(0);
+      _b = emptyBoard();
       print('JJA Game Reset!');
     }
     print(_q.map((p) => piece_avatars[p]));
@@ -97,6 +102,35 @@ void _tick() async {
 
   _paint();
   _scheduleTick();
+}
+
+void _cleanUpFormerTetrisLines() {
+  if (_tetrisLines.isNotEmpty) {
+    for (var y = _tetrisLines.length - 1; y >= 0; y--) {
+      _b.removeAt(_tetrisLines[y]);
+    }
+    for (final _ in _tetrisLines) {
+      _b.insert(0, List<int>.filled(board_x, empty_value));
+    }
+    _tetrisLines.clear();
+  }
+}
+
+void _removeTetrisLines() {
+  for (var y = 0; y < board_y; y++) {
+    var clearLine = true;
+    for (var x = 0; x < board_x; x++) {
+      if (pixelIsEmpty(x, y, _b)) {
+        clearLine = false;
+      }
+    }
+    if (clearLine) {
+      _tetrisLines.add(y);
+      for (var x = 0; x < board_x; x++) {
+        _b[y][x] = empty_value;
+      }
+    }
+  }
 }
 
 void _addPieceToQueue() {
@@ -112,6 +146,7 @@ void _onKeyDown(KeyboardEvent e) {
     case KeyCode.ESC:
       _reset();
       break;
+    case KeyCode.ENTER:
     case KeyCode.SPACE:
       _dropPiece();
       break;
@@ -127,13 +162,25 @@ void _onKeyDown(KeyboardEvent e) {
     case KeyCode.DOWN:
       _movePieceDown();
       break;
+    case KeyCode.P:
+      _togglePause();
+      break;
     default:
   }
   _paint();
 }
 
+void _togglePause() {
+  if (paused) {
+    _scheduleTick();
+  } else {
+    _tickTimer?.cancel();
+  }
+  paused = !paused;
+}
+
 void _dropPiece() {
-  var dy = 1;
+  var dy = 0;
   while (isValid(_x, _y + dy, _r, _i, _b)) {
     dy++;
   }
@@ -220,7 +267,19 @@ bool yOnBoard(int y) => y >= 0 && y < board_y;
 
 bool xOnBoard(int x) => x >= 0 && x < board_x;
 
-List<List<int>> pieceMask(int x, int y, int r, int i) => boardWithPiece(x, y, r, i, filledBoard(0));
+// a copy of b1 with non-empty pixels from b2 added to it
+List<List<int>> merged(List<List<int>> b1, List<List<int>> b2) {
+  final b = <List<int>>[];
+  for (var y = 0; y < board_y; y++) {
+    b.add(<int>[]);
+    for (var x = 0; x < board_x; x++) {
+      b[y].add(!pixelIsEmpty(x, y, b2) ? b2[y][x] : b1[y][x]);
+    }
+  }
+  return b;
+}
+
+List<List<int>> pieceMask(int x, int y, int r, int i) => boardWithPiece(x, y, r, i, emptyBoard());
 
 List<List<int>> boardWithPiece(int x, int y, int r, int i, List<List<int>> b) {
   final n = boardCopy(b);
@@ -231,30 +290,32 @@ List<List<int>> boardWithPiece(int x, int y, int r, int i, List<List<int>> b) {
       final by = py + y;
       final bx = px + x;
       if (!pixelIsEmpty(px, py, p) && xOnBoard(bx) && yOnBoard(by)) {
-        n[by][bx] = 1;
+        n[by][bx] = p[py][px];
       }
     }
   }
   return n;
 }
 
-List<List<int>> filledBoard(int value) {
+List<List<int>> emptyBoard() {
   final b = <List<int>>[];
   for (var y = 0; y < board_y; y++) {
-    b.add(<int>[]);
-    for (var x = 0; x < board_x; x++) {
-      b[y].add(value);
-    }
+    b.add(List<int>.filled(board_x, empty_value));
   }
   return b;
 }
 
-List<List<int>> boardCopy(List<List<int>> b) {
+// use replace to 
+List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
   final n = <List<int>>[];
   for (var y = 0; y < board_y; y++) {
     n.add(<int>[]);
     for (var x = 0; x < board_x; x++) {
-      n[y].add(b[y][x]);
+      if (pixelIsEmpty(x, y, b)) {
+        n[y].add(empty_value);
+      } else {
+        n[y].add(shadow ? shadow_value : b[y][x]);
+      }
     }
   }
   return n;
@@ -329,33 +390,33 @@ final pieces = <List<List<int>>>[
   ],
   [
     [0, 0, 0, 0],
-    [1, 1, 1, 1],
+    [2, 2, 2, 2],
     [0, 0, 0, 0],
     [0, 0, 0, 0]
   ],
   [
     [0, 0, 0],
-    [0, 1, 1],
-    [1, 1, 0]
+    [0, 3, 3],
+    [3, 3, 0]
   ],
   [
     [0, 0, 0],
-    [1, 1, 0],
-    [0, 1, 1]
+    [4, 4, 0],
+    [0, 4, 4]
   ],
   [
-    [0, 1, 0],
-    [0, 1, 0],
-    [0, 1, 1]
+    [0, 5, 0],
+    [0, 5, 0],
+    [0, 5, 5]
   ],
   [
-    [0, 1, 0],
-    [0, 1, 0],
-    [1, 1, 0]
+    [0, 6, 0],
+    [0, 6, 0],
+    [6, 6, 0]
   ],
   [
     [0, 0, 0],
-    [1, 1, 1],
-    [0, 1, 0]
+    [7, 7, 7],
+    [0, 7, 0]
   ],
 ];

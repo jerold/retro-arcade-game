@@ -3,9 +3,6 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  /* white-space: nowrap;
-  font-family: monospace;
-  display: inline-block; */
 }
 
 body {
@@ -25,22 +22,42 @@ body {
   gap: 2px;
 } 
 
-#background .shape-0 {
-  background-color: #efefef;
+.pixel.empty {
+  background-color: #f8f8f8;
 }
 
-#tetris .shape-1 {
-  background-color: black;
-}
-
-#mask .shape-1 {
-  background-color: #0094ff;
-}
-
-#optimistic .shape-1 {
+.pixel.shadow {
   background-color: #ccc;
 }
 
+.pixel.piece-1 {
+  background-color: #F94144;
+}
+
+.pixel.piece-2 {
+  background-color: #F3722C;
+}
+
+.pixel.piece-3 {
+  background-color: #F8961E;
+}
+
+.pixel.piece-4 {
+background-color: #F9C74F;
+}
+
+.pixel.piece-5 {
+background-color: #90BE6D;
+}
+
+.pixel.piece-6 {
+background-color: #43AA8B;
+}
+
+.pixel.piece-7 {
+background-color: #577590;
+}
+  
 .pixel {
   display: block;
   width: 10px;
