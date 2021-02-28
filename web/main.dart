@@ -15,6 +15,7 @@ var _q = <int>[];
 
 // lines that should be cleaned up
 var _tetrisLines = <int>[];
+var _score = 0;
 
 int get _i => _q.first;
 int _y;
@@ -95,9 +96,10 @@ void _tick() async {
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
       _b = emptyBoard();
-      print('JJA Game Reset!');
+      _score = 0;
+      print('JJA Game Over!');
     }
-    print(_q.map((p) => piece_avatars[p]));
+    print('$_score ${_q.map((p) => piece_avatars[p])}');
   }
 
   _paint();
@@ -130,6 +132,24 @@ void _removeTetrisLines() {
         _b[y][x] = empty_value;
       }
     }
+  }
+  _updateScore(_tetrisLines.length);
+}
+
+void _updateScore(int linesRemoved) {
+  switch(linesRemoved) {
+    case 1:
+      _score += 40;
+      return;
+    case 2:
+      _score += 100;
+      return;
+    case 3:
+      _score += 300;
+      return;
+    case 4:
+      _score += 1200;
+      return;
   }
 }
 
