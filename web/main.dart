@@ -2,19 +2,20 @@ import 'dart:async';
 import 'dart:html';
 import 'dart:math';
 
+// used to generate new piece indexes in the queue
+final rand = Random();
+
 // board dimensions
 const board_y = 24;
 const board_x = 10;
-
-// rate at which the game progresses
-const tick_ms = 400;
 
 // values used to for empty and shadowed pixels
 const empty_value = 0;
 const shadow_value = -1;
 
-// used to generate new piece indexes in the queue
-final rand = Random();
+// rate at which the game progresses
+const tick_ms_inc = 100;
+var _tick_ms = 400;
 
 // current board and piece index queue where front element is current piece
 var _b = emptyBoard();
@@ -90,7 +91,7 @@ void _start() async {
 
 Timer _tickTimer;
 void _scheduleTick() async {
-  _tickTimer = Timer(Duration(milliseconds: tick_ms), _tick);
+  _tickTimer = Timer(Duration(milliseconds: _tick_ms), _tick);
 }
 
 // clears the board and resets the score
@@ -211,6 +212,14 @@ void _onKeyDown(KeyboardEvent e) {
     case KeyCode.P:
       _togglePause();
       break;
+    case KeyCode.NUM_PLUS:
+    case KeyCode.EQUALS: // plus
+      _changeSpeed(-tick_ms_inc);
+      break;
+    case KeyCode.NUM_MINUS:
+    case KeyCode.DASH: // minus
+      _changeSpeed(tick_ms_inc);
+      break;
     default:
   }
   _paint();
@@ -223,6 +232,12 @@ void _togglePause() {
     _tickTimer?.cancel();
   }
   paused = !paused;
+}
+
+// change the rate a piece falls
+void _changeSpeed(int ms) {
+  _tick_ms = max(0, _tick_ms + ms);
+  print('Speed set to ${_tick_ms}ms');
 }
 
 // current piece is shifted down as far as it can go, and locked in
