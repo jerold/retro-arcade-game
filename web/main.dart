@@ -19,7 +19,7 @@ var _tick_ms = 400;
 
 // current board and piece index queue where front element is current piece
 var _b = emptyBoard();
-var _q = List<int>.generate(4, (_) => rand.nextInt(pieces.length));
+var _q = freshQueue();
 
 // lines that should be cleaned up
 var _tetrisLines = <int>[];
@@ -86,7 +86,9 @@ void _start() async {
   _printScoreAndQueue();
 
   _paint();
-  _scheduleTick();
+  if (!paused) {
+    _scheduleTick();
+  }
 }
 
 Timer _tickTimer;
@@ -96,9 +98,11 @@ void _scheduleTick() async {
 
 // clears the board and resets the score
 void _reset() {
-  _b = emptyBoard();
   _score = 0;
-  print('Game Over!');
+  _b = emptyBoard();
+  _q = freshQueue();
+  _resetPieceTransforms();
+  _paint();
 }
 
 // progresses the board state on an interval
@@ -114,6 +118,7 @@ void _tick() async {
     _enqueue();
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
+      print('Game Over');
       _reset();
     }
     _printScoreAndQueue();
@@ -124,7 +129,7 @@ void _tick() async {
 }
 
 void _printScoreAndQueue() {
-  print('$_score ${_q.map((p) => piece_avatars[p])}');
+  print('${piece_avatars[_q.first]} ${_q.sublist(1).map((p) => piece_avatars[p])} $_score');
 }
 
 // empty out rows that have no empty pixels and update score
@@ -186,6 +191,8 @@ void _enqueue() {
 void _dequeue() {
   _q.removeAt(0);
 }
+
+List<int> freshQueue() => List<int>.generate(4, (_) => rand.nextInt(pieces.length));
 
 // process user inputs
 void _onKeyDown(KeyboardEvent e) {
