@@ -14,7 +14,7 @@ const empty_value = 0;
 const shadow_value = -1;
 
 // rate at which the game progresses
-const tick_ms_inc = 100;
+const tick_ms_inc = 50;
 var _tick_ms = 400;
 
 // current board and piece index queue where front element is current piece
@@ -64,7 +64,7 @@ String boardAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(
 String pixelAsInnerHtml(int pixel) => '<div class="pixel ${pixelClassName(pixel)}"></div>';
 
 String pixelClassName(int pixel) {
-  switch(pixel) {
+  switch (pixel) {
     case 0:
       return 'empty';
     case -1:
@@ -132,6 +132,22 @@ void _printScoreAndQueue() {
   print('${piece_avatars[_q.first]} ${_q.sublist(1).map((p) => piece_avatars[p])} $_score');
 }
 
+class Decision {
+  List<List<int>> boardIn;
+  List<List<int>> boardOut;
+
+  // actions taken to produce this outcome
+  int x;
+  int r;
+
+  int score; // score change given this move
+  int space; // number of open rows above pile
+
+  List<Decision> branches;
+
+  Decision(int x, int y, List<List<int>> b, List<int> q) {}
+}
+
 // empty out rows that have no empty pixels and update score
 void _emptyTetrisLines() {
   for (var y = 0; y < board_y; y++) {
@@ -166,7 +182,7 @@ void _squashEmptyTetrisLines() {
 
 // updates score depending on how many lines were cleared
 void _updateScore(int linesRemoved) {
-  switch(linesRemoved) {
+  switch (linesRemoved) {
     case 1:
       _score += 40;
       return;
