@@ -97,7 +97,7 @@ void _scheduleTick() async {
 void _reset() {
   _b = emptyBoard();
   _score = 0;
-  print('JJA Game Over!');
+  print('Game Over!');
 }
 
 // progresses the board state on an interval
