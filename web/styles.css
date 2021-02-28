@@ -59,6 +59,11 @@ body {
     transform: scale(.6);
 }
 
+.pixel.predict {
+    background-color: rgb(238, 238, 238);
+    box-shadow: 0px 6px 18px 1px rgba(238, 238, 238, 0.6);
+}
+
 .pixel.piece-1 {
     background-color: rgb(249, 67, 70);
     box-shadow: 0px 6px 18px 1px rgba(249, 67, 70, 0.6);

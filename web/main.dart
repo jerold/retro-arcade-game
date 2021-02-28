@@ -1,3 +1,7 @@
+/// Author: Jerold Albertson
+/// Contact: jerold.albertson@gmail.com : github.com/jerold
+/// Usage: If used, please provide visible attribution.
+
 import 'dart:async';
 import 'dart:html';
 import 'dart:math';
@@ -12,14 +16,20 @@ const board_x = 10;
 // values used to for empty and shadowed pixels
 const empty_value = 0;
 const shadow_value = -1;
+const predict_value = -2;
 
 // rate at which the game progresses
-const tick_ms_inc = 50;
+const ms_inc = 50;
 var _tick_ms = 400;
+var _auto_ms = 150;
 
 // current board and piece index queue where front element is current piece
 var _b = emptyBoard();
 var _q = freshQueue();
+
+// predicts possible moves and changes in score, can be used to
+// automate piece placement.
+Possibility _p;
 
 // lines that should be cleaned up
 var _tetrisLines = <int>[];
@@ -34,6 +44,9 @@ int _r;
 // flag for pausing the game
 bool paused = false;
 
+// have the game play itself
+bool autopilot = false;
+
 // DOM Element the board is mounted into
 Element _boardElement;
 
@@ -46,11 +59,17 @@ void main() {
 
 // updates the DOM to reflect the current game state
 void _paint() async {
-  var dy = 0;
-  while (isValid(_x, _y + dy, _r, _i, _b)) {
-    dy++;
+  var composite = boardCopy(_b);
+
+  // show predictions when possibilities have been generated
+  if (_p != null) {
+    final predictY = maxValidY(_p.x, _y, _p.r, _i, _b);
+    composite = merged(composite, boardCopy(pieceMask(_p.x, predictY, _p.r, _i), mask: predict_value));
   }
-  var composite = merged(_b, boardCopy(pieceMask(_x, _y + dy - 1, _r, _i), shadow: true));
+
+  final shadowY = maxValidY(_x, _y, _r, _i, _b);
+  composite = merged(composite, boardCopy(pieceMask(_x, shadowY, _r, _i), mask: shadow_value));
+
   composite = merged(composite, pieceMask(_x, _y, _r, _i));
   final pixels = composite.expand((row) => row).toList();
   final divs = _boardElement.children;
@@ -69,6 +88,8 @@ String pixelClassName(int pixel) {
       return 'empty';
     case -1:
       return 'shadow';
+    case -2:
+      return 'predict';
     default:
       return 'piece-${pixel}';
   }
@@ -82,10 +103,7 @@ void _resetPieceTransforms() {
 }
 
 void _start() async {
-  _resetPieceTransforms();
-  _printScoreAndQueue();
-
-  _paint();
+  _reset();
   if (!paused) {
     _scheduleTick();
   }
@@ -93,7 +111,14 @@ void _start() async {
 
 Timer _tickTimer;
 void _scheduleTick() async {
-  _tickTimer = Timer(Duration(milliseconds: _tick_ms), _tick);
+  _tickTimer?.cancel();
+  _tickTimer = Timer(Duration(milliseconds: max(20, _tick_ms)), _tick);
+}
+
+Timer _autoTimer;
+void _scheduleAutopilot() async {
+  _autoTimer?.cancel();
+  _autoTimer = Timer(Duration(milliseconds: max(20, _auto_ms)), _auto);
 }
 
 // clears the board and resets the score
@@ -101,8 +126,30 @@ void _reset() {
   _score = 0;
   _b = emptyBoard();
   _q = freshQueue();
+  _updatePossibility();
   _resetPieceTransforms();
   _paint();
+}
+
+void _auto() async {
+  if (_p != null && _tetrisLines.isEmpty) {
+    if (_r % 4 != _p.r) {
+      _rotatePiece();
+    } else if (_x > _p.x) {
+      _movePieceLeft();
+    } else if (_x < _p.x) {
+      _movePieceRight();
+    } else {
+      _dropPiece();
+    }
+  }
+
+  _paint();
+  _scheduleAutopilot();
+}
+
+void _updatePossibility() {
+  _p = Possibility.head(_b, _q);
 }
 
 // progresses the board state on an interval
@@ -116,6 +163,12 @@ void _tick() async {
     _emptyTetrisLines();
     _dequeue();
     _enqueue();
+
+    final start = DateTime.now();
+    _p = Possibility.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+    final time = DateTime.now().difference(start);
+    print('Options:${Possibility.branchCount} Best:${_p.score} x:${_p.x} r:${_p.r} ($time)');
+
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
       print('Game Over');
@@ -132,70 +185,138 @@ void _printScoreAndQueue() {
   print('${piece_avatars[_q.first]} ${_q.sublist(1).map((p) => piece_avatars[p])} $_score');
 }
 
-class Decision {
-  List<List<int>> boardIn;
-  List<List<int>> boardOut;
+class Possibility {
+  // analytic on how complex the search space was
+  static int _branchCount = 0;
+  static int get branchCount => _branchCount;
+  static int maxDepth = 2;
 
-  // actions taken to produce this outcome
-  int x;
-  int r;
+  // rotation and x values used while Branching to explore game space
+  static const rs = [0, 1, 2, 3];
+  static const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
 
-  int score; // score change given this move
-  int space; // number of open rows above pile
+  // branch represents the result of applying these inputs
+  int _ox;
+  int get x => _ox;
 
-  List<Decision> branches;
+  int _or;
+  int get r => _or;
 
-  Decision(int x, int y, List<List<int>> b, List<int> q) {}
+  bool _valid; // is provided input even valid, if not _result will be null
+  bool get valid => _valid;
+
+  int _score; // score change given this move
+  int get score => _valid ? _score + _headspace + _branches.fold(0, (childScores, b) => childScores + b.score) : 0;
+
+  int _headspace; // part of the branches fitness function
+
+  List<List<int>> _result;
+
+  final _branches = <Possibility>[];
+
+  // returns a head Possibility if no previous one existed, otherwise try to
+  // return one of previous' children representing the game state that was chosen
+  factory Possibility.next(List<List<int>> b, List<int> q, Possibility previous) {
+    if (previous != null) {
+      // TODO: return the branch for the new board (assuming it was a predicted
+      // child, update it to be head (change x and r to represent those of the
+      // highest scoring child, and have its branches recalculate a new depth
+    }
+    return Possibility.head(b, q);
+  }
+
+  // head returns a score for it's possible children x and r values
+  // from its top scoring branch;
+  Possibility.head(List<List<int>> b, List<int> q) {
+    _branchCount = 0;
+    _result = b;
+    _score = 0;
+    _headspace = headspace(_result);
+    
+    if (q.isNotEmpty) {
+      for (final br in rs) {
+        for (final bx in xs) {
+          final b = Possibility(bx, br, q, 0, _result);
+          if (b.valid) {
+            _branches.add(b);
+          }
+        }
+      }
+    }
+    _valid = _branches.isNotEmpty;
+    if (_valid) {
+      var _bestBranchIndex = 0;
+      var _bestBranchScore = 0;
+      for (var i = 0; i < _branches.length; i++) {
+        final branchScore = _branches[i].score;
+        if (branchScore > _bestBranchScore) {
+          _bestBranchIndex = i;
+          _bestBranchScore = branchScore;
+        }
+      }
+      _or = _branches[_bestBranchIndex].r;
+      _ox = _branches[_bestBranchIndex].x;
+    }
+  }
+
+  Possibility(this._ox, this._or, List<int> q, int depth, List<List<int>> b) {
+    _branchCount++;
+    if (q.isNotEmpty && depth < q.length && isValid(_ox, 0, _or, q[depth], b)) {
+      final i = q[depth];
+      _valid = true;
+      final y = maxValidY(_ox, 0, _or, i, b);
+      _result = boardWithPiece(_ox, y, _or, i, b);
+      final l = scoringLines(_result);
+      _score = scoreForLines(l.length);
+      _result = boardWithLinesSquashed(_result, l);
+      _headspace = headspace(_result);
+
+      if (q.length > depth + 1 && depth + 1 < maxDepth) {
+        for (final br in rs) {
+          for (final bx in xs) {
+            final b = Possibility(bx, br, q, depth+1, _result);
+            if (b.valid) {
+              _branches.add(b);
+            }
+          }
+        }
+      }
+    } else {
+      _valid = false;
+    }
+  }
 }
 
 // empty out rows that have no empty pixels and update score
 void _emptyTetrisLines() {
-  for (var y = 0; y < board_y; y++) {
-    var clearLine = true;
-    for (var x = 0; x < board_x; x++) {
-      if (pixelIsEmpty(x, y, _b)) {
-        clearLine = false;
-      }
-    }
-    if (clearLine) {
-      _tetrisLines.add(y);
-      for (var x = 0; x < board_x; x++) {
-        _b[y][x] = empty_value;
-      }
-    }
+  _tetrisLines = scoringLines(_b);
+  if (_tetrisLines.isNotEmpty) {
+    _b = boardWithLinesEmptied(_b, _tetrisLines);
+    _score = _score + scoreForLines(_tetrisLines.length);
   }
-  _updateScore(_tetrisLines.length);
 }
 
 // any emptied lines are removed and lines above them shift down
 void _squashEmptyTetrisLines() {
   if (_tetrisLines.isNotEmpty) {
-    for (var y = _tetrisLines.length - 1; y >= 0; y--) {
-      _b.removeAt(_tetrisLines[y]);
-    }
-    for (final _ in _tetrisLines) {
-      _b.insert(0, List<int>.filled(board_x, empty_value));
-    }
+    _b = boardWithLinesSquashed(_b, _tetrisLines);
     _tetrisLines.clear();
   }
 }
 
-// updates score depending on how many lines were cleared
-void _updateScore(int linesRemoved) {
-  switch (linesRemoved) {
+// maps the score fore completing the given number of lines
+int scoreForLines(int lineCount) {
+  switch (lineCount) {
     case 1:
-      _score += 40;
-      return;
+      return 40;
     case 2:
-      _score += 100;
-      return;
+      return 100;
     case 3:
-      _score += 300;
-      return;
+      return 300;
     case 4:
-      _score += 1200;
-      return;
+      return 1200;
   }
+  return 0;
 }
 
 // add a piece index to the end of the queue
@@ -235,13 +356,16 @@ void _onKeyDown(KeyboardEvent e) {
     case KeyCode.P:
       _togglePause();
       break;
+    case KeyCode.A:
+      _toggleAutopilot();
+      break;
     case KeyCode.NUM_PLUS:
     case KeyCode.EQUALS: // plus
-      _changeSpeed(-tick_ms_inc);
+      _changeSpeed(-ms_inc);
       break;
     case KeyCode.NUM_MINUS:
     case KeyCode.DASH: // minus
-      _changeSpeed(tick_ms_inc);
+      _changeSpeed(ms_inc);
       break;
     default:
   }
@@ -257,19 +381,25 @@ void _togglePause() {
   paused = !paused;
 }
 
+void _toggleAutopilot() {
+  if (autopilot) {
+    _scheduleAutopilot();
+  } else {
+    _autoTimer?.cancel();
+  }
+  autopilot = !autopilot;
+}
+
 // change the rate a piece falls
 void _changeSpeed(int ms) {
-  _tick_ms = max(0, _tick_ms + ms);
-  print('Speed set to ${_tick_ms}ms');
+  _tick_ms = _tick_ms + ms;
+  _auto_ms = _auto_ms + ms;
+  print('Speed set to tick:${_tick_ms}ms auto:${_auto_ms}ms');
 }
 
 // current piece is shifted down as far as it can go, and locked in
 void _dropPiece() {
-  var dy = 0;
-  while (isValid(_x, _y + dy, _r, _i, _b)) {
-    dy++;
-  }
-  _y = _y + dy - 1;
+  _y = maxValidY(_x, _y, _r, _i, _b);
   _tick();
 }
 
@@ -303,6 +433,7 @@ void _rotatePiece() {
 void _movePieceLeft() {
   if (isValid(_x - 1, _y, _r, _i, _b)) {
     _x--;
+    print('x:$_x');
   }
 }
 
@@ -310,6 +441,7 @@ void _movePieceLeft() {
 void _movePieceRight() {
   if (isValid(_x + 1, _y, _r, _i, _b)) {
     _x++;
+    print('x:$_x');
   }
 }
 
@@ -320,32 +452,46 @@ void _movePieceDown() {
   }
 }
 
-// checks for for collisions with locked in pixels and board boundary
-bool isValid(int x, int y, int r, int i, List<List<int>> b) =>
-    !collision(pieceMask(x, y, r, i), b) && pieceIsWithinBoard(x, y, r, i);
-
-// collisions exist if the same pixel is not-empty in both boards
-bool collision(List<List<int>> b1, List<List<int>> b2) {
-  for (var y = 0; y < board_y; y++) {
-    for (var x = 0; x < board_x; x++) {
-      if (!pixelIsEmpty(x, y, b1) && !pixelIsEmpty(x, y, b2)) {
-        return true;
-      }
-    }
+// assuming the board is valid with the piece at a given x find
+// how far the piece can be dropped while still being valid
+int maxValidY(int x, int y, int r, int i, List<List<int>> b) {
+  var dy = 0;
+  while (isValid(x, y + dy + 1, r, i, b)) {
+    dy++;
   }
-  return false;
+  return y + dy;
 }
 
-// all non-empty piece pixels must be within the board boundary
-bool pieceIsWithinBoard(int x, int y, int r, int i) {
+// counts the consecutive empty rows from the top of the board
+int headspace(List<List<int>> b) {
+  var r = 0;
+  for (var y = 0; y < board_y; y++) {
+    for (var x = 0; x < board_x; x++) {
+      if (!pixelIsEmpty(x, y, b)) {
+        return r;
+      }
+    }
+    r++;
+  }
+  return r;
+}
+
+// true if a piece is 100% on the board and doesn't intersect non-empty board pixels
+bool isValid(int x, int y, int r, int i, List<List<int>> b) {
   final p = rotatedPiece(r, i);
   for (var py = 0; py < p.length; py++) {
     for (var px = 0; px < p[py].length; px++) {
-      // board coord of this piece pixel
+      // board coord of this pixel of the piece
       final bx = px + x;
       final by = py + y;
-      if (!pixelIsEmpty(px, py, p) && (!xOnBoard(bx) || !yOnBoard(by))) {
-        return false;
+      if (!pixelIsEmpty(px, py, p)) {
+        if (!xOnBoard(bx) || !yOnBoard(by)) {
+          // all pixels from the piece must be within the board
+          return false;
+        } else if (!pixelIsEmpty(bx, by, b)) {
+          // piece must not collide with non-empty pixels on the board
+          return false;
+        }
       }
     }
   }
@@ -357,6 +503,46 @@ bool pixelIsEmpty(int x, int y, List<List<int>> m) => m[y][x] == 0;
 bool yOnBoard(int y) => y >= 0 && y < board_y;
 
 bool xOnBoard(int x) => x >= 0 && x < board_x;
+
+// returns the row indexes that are complete and can be removed;
+List<int> scoringLines(List<List<int>> b) {
+  final l = <int>[];
+  for (var y = 0; y < board_y; y++) {
+    var clearLine = true;
+    for (var x = 0; x < board_x; x++) {
+      if (pixelIsEmpty(x, y, b)) {
+        clearLine = false;
+      }
+    }
+    if (clearLine) {
+      l.add(y);
+    }
+  }
+  return l;
+}
+
+// returns a copy of the board with pixels in given lines set to empty_value
+List<List<int>> boardWithLinesEmptied(List<List<int>> b, List<int> l) {
+  final n = boardCopy(b);
+  for (var y = l.length - 1; y >= 0; y--) {
+    for (var x = 0; x < board_x; x++) {
+      n[l[y]][x] = empty_value;
+    }
+  }
+  return n;
+}
+
+// returns a copy of the board with given lines squashed (replaced from above)
+List<List<int>> boardWithLinesSquashed(List<List<int>> b, List<int> l) {
+  final n = boardCopy(b);
+  for (var y = l.length - 1; y >= 0; y--) {
+    n.removeAt(l[y]);
+  }
+  for (final _ in l) {
+    n.insert(0, List<int>.filled(board_x, empty_value));
+  }
+  return n;
+}
 
 // returns a copy of b1 with non-empty pixels from b2 added to it
 List<List<int>> merged(List<List<int>> b1, List<List<int>> b2) {
@@ -399,8 +585,8 @@ List<List<int>> emptyBoard() {
 }
 
 // returns a board sized 2d array identical to the one provided, all non-empty
-// pixels will be replaced with the shadow_value if shadow param is given
-List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
+// pixels will be replaced with the mask if given
+List<List<int>> boardCopy(List<List<int>> b, {int mask}) {
   final n = <List<int>>[];
   for (var y = 0; y < board_y; y++) {
     n.add(<int>[]);
@@ -408,7 +594,7 @@ List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
       if (pixelIsEmpty(x, y, b)) {
         n[y].add(empty_value);
       } else {
-        n[y].add(shadow ? shadow_value : b[y][x]);
+        n[y].add(mask ?? b[y][x]);
       }
     }
   }
@@ -418,12 +604,19 @@ List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
 // pretty print a 2d array to the console
 void printArray(List<List<int>> a, {String label}) {
   print('------------ ${label ?? ""}');
+  if ( a[0].length <= 10) {
+    var xAxis = '';
+    for (var x = 0; x < a[0].length; x++) {
+      xAxis += ' $x ';
+    }
+    print(xAxis);
+  }
   for (var y = 0; y < a.length; y++) {
     var line = '';
     for (var x = 0; x < a[y].length; x++) {
-      line += '${a[y][x]}';
+      line += '${pixelIsEmpty(x, y, a) ? "[ ]" : "[x]"}';
     }
-    print(line);
+    print('$line $y');
   }
 }
 
