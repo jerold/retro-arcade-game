@@ -2,36 +2,48 @@ import 'dart:async';
 import 'dart:html';
 import 'dart:math';
 
-const board_y = 24; // standard board height
-const board_x = 10; // standard board width
+// board dimensions
+const board_y = 24;
+const board_x = 10;
+
+// rate at which the game progresses
+const tick_ms = 400;
+
+// values used to for empty and shadowed pixels
+const empty_value = 0;
+const shadow_value = -1;
+
+// used to generate new piece indexes in the queue
 final rand = Random();
 
-const tick_ms = 400;
-const empty_value = 0;
-const shadow_value = -1; // 0 is empty, 1-7 for a piece, and -1 for shadow
-
+// current board and piece index queue where front element is current piece
 var _b = emptyBoard();
-var _q = <int>[];
+var _q = List<int>.generate(4, (_) => rand.nextInt(pieces.length));
 
 // lines that should be cleaned up
 var _tetrisLines = <int>[];
 var _score = 0;
 
+// current piece details: index, x, y, and rotation
 int get _i => _q.first;
 int _y;
 int _x;
 int _r;
 
+// flag for pausing the game
 bool paused = false;
 
+// DOM Element the board is mounted into
 Element _boardElement;
 
 void main() {
   document.body.onKeyDown.listen(_onKeyDown);
   _boardElement = querySelector('#tetris');
+  _boardElement.innerHtml = boardAsInnerHtml(emptyBoard());
   _start();
 }
 
+// updates the DOM to reflect the current game state
 void _paint() async {
   var dy = 0;
   while (isValid(_x, _y + dy, _r, _i, _b)) {
@@ -39,7 +51,11 @@ void _paint() async {
   }
   var composite = merged(_b, boardCopy(pieceMask(_x, _y + dy - 1, _r, _i), shadow: true));
   composite = merged(composite, pieceMask(_x, _y, _r, _i));
-  _boardElement.innerHtml = boardAsInnerHtml(composite);
+  final pixels = composite.expand((row) => row).toList();
+  final divs = _boardElement.children;
+  for (var i = 0; i < divs.length; i++) {
+    divs[i].className = 'pixel ${pixelClassName(pixels[i])}';
+  }
 }
 
 String boardAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
@@ -57,6 +73,7 @@ String pixelClassName(int pixel) {
   }
 }
 
+// relocates piece transforms to the top of the board following a dequeue
 void _resetPieceTransforms() {
   _r = 0;
   _x = initialX(_i);
@@ -64,11 +81,8 @@ void _resetPieceTransforms() {
 }
 
 void _start() async {
-  _addPieceToQueue();
-  _addPieceToQueue();
-  _addPieceToQueue();
-  _addPieceToQueue();
   _resetPieceTransforms();
+  _printScoreAndQueue();
 
   _paint();
   _scheduleTick();
@@ -79,46 +93,41 @@ void _scheduleTick() async {
   _tickTimer = Timer(Duration(milliseconds: tick_ms), _tick);
 }
 
+// clears the board and resets the score
 void _reset() {
   _b = emptyBoard();
+  _score = 0;
+  print('JJA Game Over!');
 }
 
+// progresses the board state on an interval
 void _tick() async {
   _tickTimer?.cancel();
-  _cleanUpFormerTetrisLines();
+  _squashEmptyTetrisLines();
   if (isValid(_x, _y + 1, _r, _i, _b)) {
     _y++;
   } else {
     _b = boardWithPiece(_x, _y, _r, _i, _b);
-    _removeTetrisLines();
-    _popPieceFromQueue();
-    _addPieceToQueue();
+    _emptyTetrisLines();
+    _dequeue();
+    _enqueue();
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
-      _b = emptyBoard();
-      _score = 0;
-      print('JJA Game Over!');
+      _reset();
     }
-    print('$_score ${_q.map((p) => piece_avatars[p])}');
+    _printScoreAndQueue();
   }
 
   _paint();
   _scheduleTick();
 }
 
-void _cleanUpFormerTetrisLines() {
-  if (_tetrisLines.isNotEmpty) {
-    for (var y = _tetrisLines.length - 1; y >= 0; y--) {
-      _b.removeAt(_tetrisLines[y]);
-    }
-    for (final _ in _tetrisLines) {
-      _b.insert(0, List<int>.filled(board_x, empty_value));
-    }
-    _tetrisLines.clear();
-  }
+void _printScoreAndQueue() {
+  print('$_score ${_q.map((p) => piece_avatars[p])}');
 }
 
-void _removeTetrisLines() {
+// empty out rows that have no empty pixels and update score
+void _emptyTetrisLines() {
   for (var y = 0; y < board_y; y++) {
     var clearLine = true;
     for (var x = 0; x < board_x; x++) {
@@ -136,6 +145,20 @@ void _removeTetrisLines() {
   _updateScore(_tetrisLines.length);
 }
 
+// any emptied lines are removed and lines above them shift down
+void _squashEmptyTetrisLines() {
+  if (_tetrisLines.isNotEmpty) {
+    for (var y = _tetrisLines.length - 1; y >= 0; y--) {
+      _b.removeAt(_tetrisLines[y]);
+    }
+    for (final _ in _tetrisLines) {
+      _b.insert(0, List<int>.filled(board_x, empty_value));
+    }
+    _tetrisLines.clear();
+  }
+}
+
+// updates score depending on how many lines were cleared
 void _updateScore(int linesRemoved) {
   switch(linesRemoved) {
     case 1:
@@ -153,14 +176,17 @@ void _updateScore(int linesRemoved) {
   }
 }
 
-void _addPieceToQueue() {
+// add a piece index to the end of the queue
+void _enqueue() {
   _q.add(rand.nextInt(pieces.length));
 }
 
-void _popPieceFromQueue() {
+// remove a piece index from the front of the queue
+void _dequeue() {
   _q.removeAt(0);
 }
 
+// process user inputs
 void _onKeyDown(KeyboardEvent e) {
   switch (e.keyCode) {
     case KeyCode.ESC:
@@ -199,6 +225,7 @@ void _togglePause() {
   paused = !paused;
 }
 
+// current piece is shifted down as far as it can go, and locked in
 void _dropPiece() {
   var dy = 0;
   while (isValid(_x, _y + dy, _r, _i, _b)) {
@@ -208,7 +235,7 @@ void _dropPiece() {
   _tick();
 }
 
-// rotation might require shifting away from walls or obsticles
+// rotation might require shifting away from walls or obstacles
 void _rotatePiece() {
   if (isValid(_x, _y, _r + 1, _i, _b)) {
     _r++;
@@ -234,31 +261,36 @@ void _rotatePiece() {
   }
 }
 
+// transforms current piece left on the board if possible
 void _movePieceLeft() {
   if (isValid(_x - 1, _y, _r, _i, _b)) {
     _x--;
   }
 }
 
+// transforms current piece right on the board if possible
 void _movePieceRight() {
   if (isValid(_x + 1, _y, _r, _i, _b)) {
     _x++;
   }
 }
 
+// transforms current piece down on the board if possible
 void _movePieceDown() {
   if (isValid(_x, _y + 1, _r, _i, _b)) {
     _y++;
   }
 }
 
+// checks for for collisions with locked in pixels and board boundary
 bool isValid(int x, int y, int r, int i, List<List<int>> b) =>
     !collision(pieceMask(x, y, r, i), b) && pieceIsWithinBoard(x, y, r, i);
 
-bool collision(List<List<int>> m, List<List<int>> b) {
+// collisions exist if the same pixel is not-empty in both boards
+bool collision(List<List<int>> b1, List<List<int>> b2) {
   for (var y = 0; y < board_y; y++) {
     for (var x = 0; x < board_x; x++) {
-      if (!pixelIsEmpty(x, y, m) && !pixelIsEmpty(x, y, b)) {
+      if (!pixelIsEmpty(x, y, b1) && !pixelIsEmpty(x, y, b2)) {
         return true;
       }
     }
@@ -266,6 +298,7 @@ bool collision(List<List<int>> m, List<List<int>> b) {
   return false;
 }
 
+// all non-empty piece pixels must be within the board boundary
 bool pieceIsWithinBoard(int x, int y, int r, int i) {
   final p = rotatedPiece(r, i);
   for (var py = 0; py < p.length; py++) {
@@ -287,7 +320,7 @@ bool yOnBoard(int y) => y >= 0 && y < board_y;
 
 bool xOnBoard(int x) => x >= 0 && x < board_x;
 
-// a copy of b1 with non-empty pixels from b2 added to it
+// returns a copy of b1 with non-empty pixels from b2 added to it
 List<List<int>> merged(List<List<int>> b1, List<List<int>> b2) {
   final b = <List<int>>[];
   for (var y = 0; y < board_y; y++) {
@@ -299,8 +332,10 @@ List<List<int>> merged(List<List<int>> b1, List<List<int>> b2) {
   return b;
 }
 
+// returns a board sized 2d array with a piece's pixels set within it
 List<List<int>> pieceMask(int x, int y, int r, int i) => boardWithPiece(x, y, r, i, emptyBoard());
 
+// returns a copy of the given board with a piece's pixels added
 List<List<int>> boardWithPiece(int x, int y, int r, int i, List<List<int>> b) {
   final n = boardCopy(b);
   final p = rotatedPiece(r, i);
@@ -325,7 +360,8 @@ List<List<int>> emptyBoard() {
   return b;
 }
 
-// use replace to 
+// returns a board sized 2d array identical to the one provided, all non-empty
+// pixels will be replaced with the shadow_value if shadow param is given
 List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
   final n = <List<int>>[];
   for (var y = 0; y < board_y; y++) {
@@ -341,17 +377,19 @@ List<List<int>> boardCopy(List<List<int>> b, {bool shadow = false}) {
   return n;
 }
 
-void printMatrix(List<List<int>> matrix, {String label}) {
+// pretty print a 2d array to the console
+void printArray(List<List<int>> a, {String label}) {
   print('------------ ${label ?? ""}');
-  for (var y = 0; y < matrix.length; y++) {
+  for (var y = 0; y < a.length; y++) {
     var line = '';
-    for (var x = 0; x < matrix[y].length; x++) {
-      line += '${matrix[y][x]}';
+    for (var x = 0; x < a[y].length; x++) {
+      line += '${a[y][x]}';
     }
     print(line);
   }
 }
 
+// returns a 2d array representing a piece rotated clockwise r times
 List<List<int>> rotatedPiece(int r, int i) {
   var piece = pieces[i];
   for (var i = 0; i < r; i++) {
@@ -360,6 +398,7 @@ List<List<int>> rotatedPiece(int r, int i) {
   return piece;
 }
 
+// rotates the given 2d array 90 degrees clockwise
 List<List<int>> rotateCW(List<List<int>> piece) {
   final len = piece.length; // all pieces are square
   final rotation = <List<int>>[];
@@ -372,6 +411,7 @@ List<List<int>> rotateCW(List<List<int>> piece) {
   return rotation;
 }
 
+// returns the starting x for a specific piece index
 int initialX(int pieceIndex) {
   switch (pieceIndex) {
     case 0:
@@ -381,6 +421,7 @@ int initialX(int pieceIndex) {
   }
 }
 
+// returns the starting y for a specific piece index
 int initialY(int pieceIndex) {
   switch (pieceIndex) {
     case 1:
@@ -393,6 +434,7 @@ int initialY(int pieceIndex) {
   }
 }
 
+// used when printing the queue to the console
 final piece_avatars = <String>[
   '⠶',
   '⠒⠒',
@@ -403,6 +445,7 @@ final piece_avatars = <String>[
   '⠲⠂',
 ];
 
+// list of 2d arrays encoding each pieces' shape and color
 final pieces = <List<List<int>>>[
   [
     [1, 1],
