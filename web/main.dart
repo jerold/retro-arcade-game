@@ -164,10 +164,10 @@ void _tick() async {
     _dequeue();
     _enqueue();
 
-    final start = DateTime.now();
+    // final start = DateTime.now();
     _p = Possibility.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
-    final time = DateTime.now().difference(start);
-    print('Options:${Possibility.branchCount} Best:${_p.score} x:${_p.x} r:${_p.r} ($time)');
+    // final time = DateTime.now().difference(start);
+    // print('Options:${Possibility.branchCount} Best:${_p.score} x:${_p.x} r:${_p.r} ($time)');
 
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
@@ -206,9 +206,10 @@ class Possibility {
   bool get valid => _valid;
 
   int _score; // score change given this move
-  int get score => _valid ? _score + _headspace + _branches.fold(0, (childScores, b) => childScores + b.score) : 0;
+  int get score => _valid ? _score + _headspace - _voids + _branches.fold(0, (childScores, b) => childScores + b.score) : 0;
 
   int _headspace; // part of the branches fitness function
+  int _voids;
 
   List<List<int>> _result;
 
@@ -232,6 +233,7 @@ class Possibility {
     _result = b;
     _score = 0;
     _headspace = headspace(_result);
+    _voids = voids(_result);
     
     if (q.isNotEmpty) {
       for (final br in rs) {
@@ -270,6 +272,7 @@ class Possibility {
       _score = scoreForLines(l.length);
       _result = boardWithLinesSquashed(_result, l);
       _headspace = headspace(_result);
+      _voids = voids(_result);
 
       if (q.length > depth + 1 && depth + 1 < maxDepth) {
         for (final br in rs) {
@@ -433,7 +436,6 @@ void _rotatePiece() {
 void _movePieceLeft() {
   if (isValid(_x - 1, _y, _r, _i, _b)) {
     _x--;
-    print('x:$_x');
   }
 }
 
@@ -441,7 +443,6 @@ void _movePieceLeft() {
 void _movePieceRight() {
   if (isValid(_x + 1, _y, _r, _i, _b)) {
     _x++;
-    print('x:$_x');
   }
 }
 
@@ -474,6 +475,24 @@ int headspace(List<List<int>> b) {
     r++;
   }
   return r;
+}
+
+// counts the number of empty pixels with no way to fill them from above
+int voids(List<List<int>> b) {
+  final clearAbove = List<bool>.filled(board_x, true);
+  var v = 0;
+  for (var y = 0; y < board_y; y++) {
+    for (var x = 0; x < board_x; x++) {
+      if (pixelIsEmpty(x, y, b)) {
+        if (!clearAbove[x]) {
+          v++;
+        }
+      } else {
+        clearAbove[x] = false;
+      }
+    }
+  }
+  return v;
 }
 
 // true if a piece is 100% on the board and doesn't intersect non-empty board pixels
