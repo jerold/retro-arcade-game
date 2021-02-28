@@ -17,6 +17,7 @@ int _r;
 Element _backgroundElement;
 Element _boardElement;
 Element _maskElement;
+Element _optimisticElement;
 
 void main() {
   document.body.onKeyDown.listen(_onKeyDown);
@@ -24,6 +25,7 @@ void main() {
   _backgroundElement = querySelector('#background');
   _boardElement = querySelector('#tetris');
   _maskElement = querySelector('#mask');
+  _optimisticElement = querySelector('#optimistic');
   _setBackground();
 
   _start();
@@ -34,6 +36,13 @@ void _setBackground() async {
 }
 
 void _paint() async {
+  var dy = 0;
+  while (isValid(_x, _y + dy, _r, _i, _b)) {
+    dy++;
+  }
+  final optimisticMask = pieceMask(_x, _y + dy - 1, _r, _i);
+  _optimisticElement.innerHtml = boardAsInnerHtml(optimisticMask);
+
   _boardElement.innerHtml = boardAsInnerHtml(_b);
 
   final mask = pieceMask(_x, _y, _r, _i);

@@ -26,7 +26,7 @@ body {
 } 
 
 #background .shape-0 {
-  background-color: #fefefe;
+  background-color: #efefef;
 }
 
 #tetris .shape-1 {
@@ -35,6 +35,10 @@ body {
 
 #mask .shape-1 {
   background-color: #0094ff;
+}
+
+#optimistic .shape-1 {
+  background-color: #ccc;
 }
 
 .pixel {
