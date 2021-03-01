@@ -684,7 +684,7 @@ class DecisionTree {
 
   // scored points from this action used in total recursive scroling below
   int _score;
-  int get score => _valid ? _score + _headspace - _voids + _branchesScore : 0;
+  int get score => _valid ? _score + _branchesScore + _headspace - _voids : 0;
 
   // part of the branch's fitness function
   int _headspace;
@@ -712,7 +712,7 @@ class DecisionTree {
     _valid = _branches.isNotEmpty;
     if (_valid) {
       var _bestBranchIndex = 0;
-      var _bestBranchScore = 0;
+      var _bestBranchScore = _branches[_bestBranchIndex].score;
       for (var i = 0; i < _branches.length; i++) {
         final branchScore = _branches[i].score;
         if (branchScore > _bestBranchScore) {
@@ -720,6 +720,7 @@ class DecisionTree {
           _bestBranchScore = branchScore;
         }
       }
+
       final bestBranch = _branches[_bestBranchIndex];
       _or = bestBranch.r;
       _ox = bestBranch.x;
