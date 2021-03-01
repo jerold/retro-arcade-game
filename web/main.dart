@@ -18,6 +18,9 @@ const empty_value = 0;
 const shadow_value = -1;
 const predict_value = -2;
 
+// ai's search tree depth
+const int maxTreeDepth = 2;
+
 // rate at which the game progresses
 const ms_inc = 50;
 var _tick_ms = 400;
@@ -164,17 +167,7 @@ void _tick() async {
     _dequeue();
     _enqueue();
 
-    final startA = DateTime.now();
-    _ai = DecisionTree.next(boardWithLinesSquashed(_b, _tetrisLines), _q, _ai);
-    final timeA = DateTime.now().difference(startA);
-    final countA = DecisionTree.branchCount;
-
-    final startB = DateTime.now();
     _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
-    final timeB = DateTime.now().difference(startB);
-    final countB = DecisionTree.branchCount;
-
-    print('Best:${_ai.score} ($countA/$timeA) ($countB/$timeB)');
 
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
@@ -663,7 +656,6 @@ class DecisionTree {
   // analytic on how complex the search space was
   static int _branchCount = 0;
   static int get branchCount => _branchCount;
-  static int maxDepth = 2;
 
   // rotation and x values used while Branching to explore game space
   static const rs = [0, 1, 2, 3];
@@ -679,38 +671,24 @@ class DecisionTree {
   int _or;
   int get r => _or;
 
-  bool _valid; // is provided input even valid, if not _result will be null
-  bool get valid => _valid;
-
-  int _score; // score change given this move
-  int get score => _valid ? _score + _headspace - _voids + _branchesScore : 0;
-
-  int _headspace; // part of the branch's fitness function
-  int _voids; // part of the branch's fitness function
-
-  // set on Head nodes, and is used to confirm the subtree results from
-  // treversing a specific board and queue.
-  List<int> _oq;
-
-  // the result of applying the x and r actions.
+  // the result of applying the x and r actions
   List<List<int>> _result;
 
-  // valid action paths
+  // is provided input even valid, if not _result will be null
+  bool _valid;
+  bool get valid => _valid;
+
+  // actions and results branching forward from this one
   final _branches = <DecisionTree>[];
   int get _branchesScore => _branches.fold(0, (childScores, b) => childScores + b.score);
 
-  // returns a new head if no previous one existed, otherwise try to
-  // return one of previous' children representing the game state that was chosen
-  factory DecisionTree.next(List<List<int>> b, List<int> q, DecisionTree previous) {
-    if (previous != null) {
-      final branch = previous._branchForBoardAndQueue(b, q);
-      if (branch != null) {
-        branch._makeHead(b, q);
-        return branch;
-      }
-    }
-    return DecisionTree.head(b, q);
-  }
+  // scored points from this action used in total recursive scroling below
+  int _score;
+  int get score => _valid ? _score + _headspace - _voids + _branchesScore : 0;
+
+  // part of the branch's fitness function
+  int _headspace;
+  int _voids;
 
   // head returns a score for it's possible children x and r values
   // from its top scoring branch;
@@ -720,7 +698,6 @@ class DecisionTree {
     _score = 0;
     _headspace = headspace(_result);
     _voids = voids(_result);
-    _oq = <int>[...q];
 
     if (q.isNotEmpty) {
       for (final br in rs) {
@@ -732,7 +709,21 @@ class DecisionTree {
         }
       }
     }
-    _updateHeadActions();
+    _valid = _branches.isNotEmpty;
+    if (_valid) {
+      var _bestBranchIndex = 0;
+      var _bestBranchScore = 0;
+      for (var i = 0; i < _branches.length; i++) {
+        final branchScore = _branches[i].score;
+        if (branchScore > _bestBranchScore) {
+          _bestBranchIndex = i;
+          _bestBranchScore = branchScore;
+        }
+      }
+      final bestBranch = _branches[_bestBranchIndex];
+      _or = bestBranch.r;
+      _ox = bestBranch.x;
+    }
   }
 
   DecisionTree(this._ox, this._or, List<int> q, int depth, List<List<int>> b) {
@@ -748,7 +739,7 @@ class DecisionTree {
       _headspace = headspace(_result);
       _voids = voids(_result);
 
-      if (q.length > depth + 1 && depth + 1 < maxDepth) {
+      if (q.length > depth + 1 && depth + 1 < maxTreeDepth) {
         for (final br in rs) {
           for (final bx in xs) {
             final b = DecisionTree(bx, br, q, depth + 1, _result);
@@ -760,70 +751,6 @@ class DecisionTree {
       }
     } else {
       _valid = false;
-    }
-  }
-
-  DecisionTree _branchForBoardAndQueue(List<List<int>> b, List<int> q) {
-    if (_oq != null && sameLists(q.sublist(0, _oq.length - 1), _oq.sublist(1))) {
-      for (final branch in _branches) {
-        if (sameArrays(b, branch._result)) {
-          return branch;
-        }
-      }
-    }
-    return null;
-  }
-
-  void _makeHead(List<List<int>> b, List<int> q) {
-    _branchCount = 0;
-    _result = b;
-    _score = 0;
-    _headspace = headspace(_result);
-    _voids = voids(_result);
-    _oq = <int>[...q];
-
-    if (q.isNotEmpty) {
-      for (final branch in _branches) {
-        branch._grow(q, 0, b);
-      }
-    }
-    _updateHeadActions();
-  }
-
-  void _updateHeadActions() {
-    _valid = _branches.isNotEmpty;
-    if (_valid) {
-      var _bestBranchIndex = 0;
-      var _bestBranchScore = 0;
-      for (var i = 0; i < _branches.length; i++) {
-        final branchScore = _branches[i].score;
-        if (branchScore > _bestBranchScore) {
-          _bestBranchIndex = i;
-          _bestBranchScore = branchScore;
-        }
-      }
-      _or = _branches[_bestBranchIndex].r;
-      _ox = _branches[_bestBranchIndex].x;
-    }
-  }
-
-  void _grow(List<int> q, int depth, List<List<int>> b) {
-    final nextDepth = depth + 1;
-    if (q.length > nextDepth && nextDepth < maxDepth) {
-      if (_branches.isEmpty) {
-        for (final br in rs) {
-          for (final bx in xs) {
-            final b = DecisionTree(bx, br, q, nextDepth, _result);
-            if (b.valid) {
-              _branches.add(b);
-            }
-          }
-        }
-      } else {
-        for (final branch in _branches) {
-          branch._grow(q, nextDepth, b);
-        }
-      }
     }
   }
 }
