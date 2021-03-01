@@ -29,7 +29,7 @@ var _q = freshQueue();
 
 // predicts possible moves and changes in score, can be used to
 // automate piece placement.
-Possibility _p;
+DecisionTree _ai;
 
 // lines that should be cleaned up
 var _tetrisLines = <int>[];
@@ -62,9 +62,9 @@ void _paint() async {
   var composite = boardCopy(_b);
 
   // show predictions when possibilities have been generated
-  if (_p != null) {
-    final predictY = maxValidY(_p.x, _y, _p.r, _i, _b);
-    composite = merged(composite, boardCopy(pieceMask(_p.x, predictY, _p.r, _i), mask: predict_value));
+  if (autopilot) {
+    final predictY = maxValidY(_ai.x, _y, _ai.r, _i, _b);
+    composite = merged(composite, boardCopy(pieceMask(_ai.x, predictY, _ai.r, _i), mask: predict_value));
   }
 
   final shadowY = maxValidY(_x, _y, _r, _i, _b);
@@ -109,6 +109,16 @@ void _start() async {
   }
 }
 
+// clear the board, score, queue, and ai.
+void _reset() {
+  _score = 0;
+  _b = emptyBoard();
+  _q = freshQueue();
+  _updateAI();
+  _resetPieceTransforms();
+  _paint();
+}
+
 Timer _tickTimer;
 void _scheduleTick() async {
   _tickTimer?.cancel();
@@ -121,23 +131,13 @@ void _scheduleAutopilot() async {
   _autoTimer = Timer(Duration(milliseconds: max(20, _auto_ms)), _auto);
 }
 
-// clears the board and resets the score
-void _reset() {
-  _score = 0;
-  _b = emptyBoard();
-  _q = freshQueue();
-  _updatePossibility();
-  _resetPieceTransforms();
-  _paint();
-}
-
 void _auto() async {
-  if (_p != null && _tetrisLines.isEmpty) {
-    if (_r % 4 != _p.r) {
+  if (_ai != null && _ai.valid && _tetrisLines.isEmpty) {
+    if (_r % 4 != _ai.r) {
       _rotatePiece();
-    } else if (_x > _p.x) {
+    } else if (_x > _ai.x) {
       _movePieceLeft();
-    } else if (_x < _p.x) {
+    } else if (_x < _ai.x) {
       _movePieceRight();
     } else {
       _dropPiece();
@@ -148,8 +148,8 @@ void _auto() async {
   _scheduleAutopilot();
 }
 
-void _updatePossibility() {
-  _p = Possibility.head(_b, _q);
+void _updateAI() {
+  _ai = DecisionTree.head(_b, _q);
 }
 
 // progresses the board state on an interval
@@ -164,10 +164,17 @@ void _tick() async {
     _dequeue();
     _enqueue();
 
-    // final start = DateTime.now();
-    _p = Possibility.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
-    // final time = DateTime.now().difference(start);
-    // print('Options:${Possibility.branchCount} Best:${_p.score} x:${_p.x} r:${_p.r} ($time)');
+    final startA = DateTime.now();
+    _ai = DecisionTree.next(boardWithLinesSquashed(_b, _tetrisLines), _q, _ai);
+    final timeA = DateTime.now().difference(startA);
+    final countA = DecisionTree.branchCount;
+
+    final startB = DateTime.now();
+    _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+    final timeB = DateTime.now().difference(startB);
+    final countB = DecisionTree.branchCount;
+
+    print('Best:${_ai.score} ($countA/$timeA) ($countB/$timeB)');
 
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
@@ -183,111 +190,6 @@ void _tick() async {
 
 void _printScoreAndQueue() {
   print('${piece_avatars[_q.first]} ${_q.sublist(1).map((p) => piece_avatars[p])} $_score');
-}
-
-class Possibility {
-  // analytic on how complex the search space was
-  static int _branchCount = 0;
-  static int get branchCount => _branchCount;
-  static int maxDepth = 2;
-
-  // rotation and x values used while Branching to explore game space
-  static const rs = [0, 1, 2, 3];
-  static const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
-
-  // branch represents the result of applying these inputs
-  int _ox;
-  int get x => _ox;
-
-  int _or;
-  int get r => _or;
-
-  bool _valid; // is provided input even valid, if not _result will be null
-  bool get valid => _valid;
-
-  int _score; // score change given this move
-  int get score => _valid ? _score + _headspace - _voids + _branches.fold(0, (childScores, b) => childScores + b.score) : 0;
-
-  int _headspace; // part of the branches fitness function
-  int _voids;
-
-  List<List<int>> _result;
-
-  final _branches = <Possibility>[];
-
-  // returns a head Possibility if no previous one existed, otherwise try to
-  // return one of previous' children representing the game state that was chosen
-  factory Possibility.next(List<List<int>> b, List<int> q, Possibility previous) {
-    if (previous != null) {
-      // TODO: return the branch for the new board (assuming it was a predicted
-      // child, update it to be head (change x and r to represent those of the
-      // highest scoring child, and have its branches recalculate a new depth
-    }
-    return Possibility.head(b, q);
-  }
-
-  // head returns a score for it's possible children x and r values
-  // from its top scoring branch;
-  Possibility.head(List<List<int>> b, List<int> q) {
-    _branchCount = 0;
-    _result = b;
-    _score = 0;
-    _headspace = headspace(_result);
-    _voids = voids(_result);
-    
-    if (q.isNotEmpty) {
-      for (final br in rs) {
-        for (final bx in xs) {
-          final b = Possibility(bx, br, q, 0, _result);
-          if (b.valid) {
-            _branches.add(b);
-          }
-        }
-      }
-    }
-    _valid = _branches.isNotEmpty;
-    if (_valid) {
-      var _bestBranchIndex = 0;
-      var _bestBranchScore = 0;
-      for (var i = 0; i < _branches.length; i++) {
-        final branchScore = _branches[i].score;
-        if (branchScore > _bestBranchScore) {
-          _bestBranchIndex = i;
-          _bestBranchScore = branchScore;
-        }
-      }
-      _or = _branches[_bestBranchIndex].r;
-      _ox = _branches[_bestBranchIndex].x;
-    }
-  }
-
-  Possibility(this._ox, this._or, List<int> q, int depth, List<List<int>> b) {
-    _branchCount++;
-    if (q.isNotEmpty && depth < q.length && isValid(_ox, 0, _or, q[depth], b)) {
-      final i = q[depth];
-      _valid = true;
-      final y = maxValidY(_ox, 0, _or, i, b);
-      _result = boardWithPiece(_ox, y, _or, i, b);
-      final l = scoringLines(_result);
-      _score = scoreForLines(l.length);
-      _result = boardWithLinesSquashed(_result, l);
-      _headspace = headspace(_result);
-      _voids = voids(_result);
-
-      if (q.length > depth + 1 && depth + 1 < maxDepth) {
-        for (final br in rs) {
-          for (final bx in xs) {
-            final b = Possibility(bx, br, q, depth+1, _result);
-            if (b.valid) {
-              _branches.add(b);
-            }
-          }
-        }
-      }
-    } else {
-      _valid = false;
-    }
-  }
 }
 
 // empty out rows that have no empty pixels and update score
@@ -376,21 +278,21 @@ void _onKeyDown(KeyboardEvent e) {
 }
 
 void _togglePause() {
-  if (paused) {
-    _scheduleTick();
-  } else {
-    _tickTimer?.cancel();
-  }
   paused = !paused;
+  if (paused) {
+    _tickTimer?.cancel();
+  } else {
+    _scheduleTick();
+  }
 }
 
 void _toggleAutopilot() {
+  autopilot = !autopilot;
   if (autopilot) {
     _scheduleAutopilot();
   } else {
     _autoTimer?.cancel();
   }
-  autopilot = !autopilot;
 }
 
 // change the rate a piece falls
@@ -575,6 +477,29 @@ List<List<int>> merged(List<List<int>> b1, List<List<int>> b2) {
   return b;
 }
 
+bool sameArrays(List<List<int>> b1, List<List<int>> b2) {
+  for (var y = 0; y < board_y; y++) {
+    for (var x = 0; x < board_x; x++) {
+      if (b1[y][x] != b2[y][x]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool sameLists(List<int> l1, List<int> l2) {
+  if (l1.length != l2.length) {
+    return false;
+  }
+  for (var i = 0; i < l1.length; i++) {
+    if (l1[i] != l2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // returns a board sized 2d array with a piece's pixels set within it
 List<List<int>> pieceMask(int x, int y, int r, int i) => boardWithPiece(x, y, r, i, emptyBoard());
 
@@ -623,7 +548,7 @@ List<List<int>> boardCopy(List<List<int>> b, {int mask}) {
 // pretty print a 2d array to the console
 void printArray(List<List<int>> a, {String label}) {
   print('------------ ${label ?? ""}');
-  if ( a[0].length <= 10) {
+  if (a[0].length <= 10) {
     var xAxis = '';
     for (var x = 0; x < a[0].length; x++) {
       xAxis += ' $x ';
@@ -733,3 +658,172 @@ final pieces = <List<List<int>>>[
     [0, 7, 0]
   ],
 ];
+
+class DecisionTree {
+  // analytic on how complex the search space was
+  static int _branchCount = 0;
+  static int get branchCount => _branchCount;
+  static int maxDepth = 2;
+
+  // rotation and x values used while Branching to explore game space
+  static const rs = [0, 1, 2, 3];
+  static const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+
+  // For Branch: the x actions taken to produce _result
+  // For Head: the x action of the branch with the highest fitness
+  int _ox;
+  int get x => _ox;
+
+  // For Branch: the x actions taken to produce _result
+  // For Head: the x action of the branch with the highest fitness
+  int _or;
+  int get r => _or;
+
+  bool _valid; // is provided input even valid, if not _result will be null
+  bool get valid => _valid;
+
+  int _score; // score change given this move
+  int get score => _valid ? _score + _headspace - _voids + _branchesScore : 0;
+
+  int _headspace; // part of the branch's fitness function
+  int _voids; // part of the branch's fitness function
+
+  // set on Head nodes, and is used to confirm the subtree results from
+  // treversing a specific board and queue.
+  List<int> _oq;
+
+  // the result of applying the x and r actions.
+  List<List<int>> _result;
+
+  // valid action paths
+  final _branches = <DecisionTree>[];
+  int get _branchesScore => _branches.fold(0, (childScores, b) => childScores + b.score);
+
+  // returns a new head if no previous one existed, otherwise try to
+  // return one of previous' children representing the game state that was chosen
+  factory DecisionTree.next(List<List<int>> b, List<int> q, DecisionTree previous) {
+    if (previous != null) {
+      final branch = previous._branchForBoardAndQueue(b, q);
+      if (branch != null) {
+        branch._makeHead(b, q);
+        return branch;
+      }
+    }
+    return DecisionTree.head(b, q);
+  }
+
+  // head returns a score for it's possible children x and r values
+  // from its top scoring branch;
+  DecisionTree.head(List<List<int>> b, List<int> q) {
+    _branchCount = 0;
+    _result = b;
+    _score = 0;
+    _headspace = headspace(_result);
+    _voids = voids(_result);
+    _oq = <int>[...q];
+
+    if (q.isNotEmpty) {
+      for (final br in rs) {
+        for (final bx in xs) {
+          final b = DecisionTree(bx, br, q, 0, _result);
+          if (b.valid) {
+            _branches.add(b);
+          }
+        }
+      }
+    }
+    _updateHeadActions();
+  }
+
+  DecisionTree(this._ox, this._or, List<int> q, int depth, List<List<int>> b) {
+    _branchCount++;
+    if (q.isNotEmpty && depth < q.length && isValid(_ox, 0, _or, q[depth], b)) {
+      final i = q[depth];
+      _valid = true;
+      final y = maxValidY(_ox, 0, _or, i, b);
+      _result = boardWithPiece(_ox, y, _or, i, b);
+      final l = scoringLines(_result);
+      _score = scoreForLines(l.length);
+      _result = boardWithLinesSquashed(_result, l);
+      _headspace = headspace(_result);
+      _voids = voids(_result);
+
+      if (q.length > depth + 1 && depth + 1 < maxDepth) {
+        for (final br in rs) {
+          for (final bx in xs) {
+            final b = DecisionTree(bx, br, q, depth + 1, _result);
+            if (b.valid) {
+              _branches.add(b);
+            }
+          }
+        }
+      }
+    } else {
+      _valid = false;
+    }
+  }
+
+  DecisionTree _branchForBoardAndQueue(List<List<int>> b, List<int> q) {
+    if (_oq != null && sameLists(q.sublist(0, _oq.length - 1), _oq.sublist(1))) {
+      for (final branch in _branches) {
+        if (sameArrays(b, branch._result)) {
+          return branch;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _makeHead(List<List<int>> b, List<int> q) {
+    _branchCount = 0;
+    _result = b;
+    _score = 0;
+    _headspace = headspace(_result);
+    _voids = voids(_result);
+    _oq = <int>[...q];
+
+    if (q.isNotEmpty) {
+      for (final branch in _branches) {
+        branch._grow(q, 0, b);
+      }
+    }
+    _updateHeadActions();
+  }
+
+  void _updateHeadActions() {
+    _valid = _branches.isNotEmpty;
+    if (_valid) {
+      var _bestBranchIndex = 0;
+      var _bestBranchScore = 0;
+      for (var i = 0; i < _branches.length; i++) {
+        final branchScore = _branches[i].score;
+        if (branchScore > _bestBranchScore) {
+          _bestBranchIndex = i;
+          _bestBranchScore = branchScore;
+        }
+      }
+      _or = _branches[_bestBranchIndex].r;
+      _ox = _branches[_bestBranchIndex].x;
+    }
+  }
+
+  void _grow(List<int> q, int depth, List<List<int>> b) {
+    final nextDepth = depth + 1;
+    if (q.length > nextDepth && nextDepth < maxDepth) {
+      if (_branches.isEmpty) {
+        for (final br in rs) {
+          for (final bx in xs) {
+            final b = DecisionTree(bx, br, q, nextDepth, _result);
+            if (b.valid) {
+              _branches.add(b);
+            }
+          }
+        }
+      } else {
+        for (final branch in _branches) {
+          branch._grow(q, nextDepth, b);
+        }
+      }
+    }
+  }
+}
