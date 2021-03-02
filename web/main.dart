@@ -52,11 +52,23 @@ bool autopilot = false;
 
 // DOM Element the board is mounted into
 Element _boardElement;
+Element _scoreElement;
+
+bool _queueChanged = false;
+final _queueElements = <Element>[];
 
 void main() {
   document.body.onKeyDown.listen(_onKeyDown);
-  _boardElement = querySelector('#tetris');
-  _boardElement.innerHtml = boardAsInnerHtml(emptyBoard());
+  _scoreElement = querySelector('#score');
+  _boardElement = querySelector('#board');
+
+  _queueElements.addAll([
+    querySelector('#q1'),
+    querySelector('#q2'),
+    querySelector('#q3'),
+  ]);
+
+  _boardElement.innerHtml = arrayAsInnerHtml(emptyBoard());
   _start();
 }
 
@@ -76,19 +88,80 @@ void _paint() async {
   composite = merged(composite, pieceMask(_x, _y, _r, _i));
   final pixels = composite.expand((row) => row).toList();
   final divs = _boardElement.children;
+
+  // marks pieces as being removed because their line was cleared
+  final tetris = <bool>[];
+  for (var y = 0; y < board_y; y++) {
+    for (var x = 0; x < board_x; x++) {
+      tetris.add(_tetrisLines.contains(y));
+    }
+  }
+
   for (var i = 0; i < divs.length; i++) {
-    divs[i].className = 'pixel ${pixelClassName(pixels[i])}';
+    divs[i].className = 'pixel ${pixelClassName(pixels[i])} ${tetris[i] ? "remove" : ""}';
+  }
+
+  _paintScore();
+  _paintQueue();
+}
+
+String _scoreText() => 'Score: $_score';
+const bounceClass = 'bounce-score';
+
+void _paintScore() async {
+  final scoreText = _scoreText();
+  if (_scoreElement.innerText != scoreText) {
+    _scoreElement.innerText = scoreText;
+    if (_score != 0 && !_scoreElement.classes.contains(bounceClass)) {
+      _scoreElement.classes.add(bounceClass);
+      await Future.delayed(Duration(milliseconds: 400));
+      _scoreElement.classes.remove(bounceClass);
+    }
   }
 }
 
-String boardAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
+void _paintQueue() async {
+  if (_queueChanged) {
+    _queueChanged = false;
+    for (var i = 0; i < _queueElements.length; i++) {
+      _paintQueuePiece(i);
+    }
+  }
+}
+
+void _paintQueuePiece(int i) {
+  final element = _queueElements[i];
+  final piece = pieces[_q[i + 1]];
+
+  element.className = 'on-deck ${pieceSizeClassName(piece.length)}';
+  element.innerHtml = arrayAsInnerHtml(piece);
+
+  final pixels = piece.expand((row) => row).toList();
+  final divs = element.children;
+  for (var i = 0; i < divs.length; i++) {
+    divs[i].className = 'pixel ${pixelClassName(pixels[i], queuePixel: true)}';
+  }
+}
+
+String arrayAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
 
 String pixelAsInnerHtml(int pixel) => '<div class="pixel ${pixelClassName(pixel)}"></div>';
 
-String pixelClassName(int pixel) {
+String pieceSizeClassName(int size) {
+  switch (size) {
+    case 2:
+      return 'x2';
+    case 4:
+      return 'x4';
+    default:
+      return 'x3';
+  }
+}
+
+String pixelClassName(int pixel, {bool queuePixel = false}) {
   switch (pixel) {
     case 0:
-      return 'empty';
+      return queuePixel ? 'q-empty' : 'empty';
     case -1:
       return 'shadow';
     case -2:
@@ -167,14 +240,16 @@ void _tick() async {
     _dequeue();
     _enqueue();
 
-    _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+    if (autopilot) {
+      _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+    }
 
     _resetPieceTransforms();
     if (!isValid(_x, _y, _r, _i, _b)) {
       print('Game Over');
       _reset();
     }
-    _printScoreAndQueue();
+    // _printScoreAndQueue();
   }
 
   _paint();
@@ -189,7 +264,7 @@ void _printScoreAndQueue() {
 void _emptyTetrisLines() {
   _tetrisLines = scoringLines(_b);
   if (_tetrisLines.isNotEmpty) {
-    _b = boardWithLinesEmptied(_b, _tetrisLines);
+    // _b = boardWithLinesEmptied(_b, _tetrisLines);
     _score = _score + scoreForLines(_tetrisLines.length);
   }
 }
@@ -220,14 +295,19 @@ int scoreForLines(int lineCount) {
 // add a piece index to the end of the queue
 void _enqueue() {
   _q.add(rand.nextInt(pieces.length));
+  _queueChanged = true;
 }
 
 // remove a piece index from the front of the queue
 void _dequeue() {
   _q.removeAt(0);
+  _queueChanged = true;
 }
 
-List<int> freshQueue() => List<int>.generate(4, (_) => rand.nextInt(pieces.length));
+List<int> freshQueue() {
+  _queueChanged = true;
+  return List<int>.generate(4, (_) => rand.nextInt(pieces.length));
+}
 
 // process user inputs
 void _onKeyDown(KeyboardEvent e) {
@@ -282,6 +362,7 @@ void _togglePause() {
 void _toggleAutopilot() {
   autopilot = !autopilot;
   if (autopilot) {
+    _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
     _scheduleAutopilot();
   } else {
     _autoTimer?.cancel();
