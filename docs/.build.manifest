@@ -1,6 +1,9 @@
 .dart_tool/package_config.json
 .packages
+favicon-16x16.png
+favicon-32x32.png
 favicon.ico
+github-icon.png
 index.html
 main.dart.js
 packages/$sdk/_internal/strong.sum
