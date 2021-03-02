@@ -282,3 +282,16 @@ body {
     background-color: #577590;
     box-shadow: 0px 6px 18px 1px rgba(223, 223, 223, 0.6);
 }
+
+.github-link {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    opacity: 80%;
+    transition: transform ease-in-out .2s;
+}
+
+.github-link:hover {
+    opacity: 100%;
+    transform: rotate(10deg);
+}
