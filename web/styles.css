@@ -17,8 +17,172 @@ body {
     background-image: linear-gradient(to bottom right, #ffe, #dfefff);
 }
 
-.board {
+#score {
     position: absolute;
+    margin-top: 280px;
+    top: 50%;
+    text-align: right;
+    font-family: 'Lobster', cursive;
+    font-size: 3rem;
+    font-weight: bolder;
+    background: linear-gradient(to right, #0034e1, #00c4b0 80%);
+    text-shadow: 4px 4px 12px rgb(0 196 176 / 40%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    user-select: none;
+}
+
+.bounce-score {
+    animation-name: bounce;
+    animation-duration: 400ms;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+
+@keyframes bounce {
+    0%{
+      transform: scale(1) rotate3d(0);
+    }
+    10%{
+        transform: scale(1.1) rotate3d(0.1, 0, 0, .5rad);
+    }
+    100%{
+      transform: scale(1) rotate3d(0);
+    }
+  }
+  
+.queue {
+    position: absolute;
+    display: grid;
+    grid-template-rows: repeat(3, 1fr);
+    gap: 2px;
+    margin-left: 320px;
+    margin-top: -340px;
+}
+
+.on-deck {
+    /* background-color: rgba(0, 0, 0, .1);
+    border-radius: 16px; */
+}
+
+#q1 {
+    opacity: 80%;
+}
+
+#q2 {
+    opacity: 60%;
+}
+
+#q3 {
+    opacity: 40%;
+}
+
+#q2.x4 .pixel, #q2.x3 .pixel, #q2.x2 .pixel, #q1.x4 .pixel, #q1.x3 .pixel, #q1.x2 .pixel {
+    animation-name: shift-up;
+    animation-duration: 500ms;
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: forwards;
+}
+
+@keyframes shift-up {
+    0%{
+        margin-top: 60px;
+    }
+    100%{
+        margin-top: 0px;
+    }
+  }
+
+#q3.x4 .pixel, #q3.x3 .pixel, #q3.x2 .pixel{
+    animation-name: flip-in;
+    animation-duration: 500ms;
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: forwards;
+}
+
+@keyframes flip-in {
+    0%{
+        margin-top: 60px;
+        transform: scale(0.1);
+        opacity: 0;
+    }
+    100%{
+        margin-top: 0px;
+        transform: scale(1);
+        opacity: 1;
+    }
+  }
+
+.remove {
+    animation-name: flip-out;
+    animation-duration: 500ms;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+}
+
+@keyframes flip-out {
+    0%{
+        transform: scale(1);
+        opacity: 1;
+    }
+    100%{
+        transform: scale(0.1);
+        opacity: 0;
+    }
+  }
+
+.x4 {
+    width: 60px;
+    height: 60px;
+
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(4, 10px);
+    grid-template-rows: repeat(4, 10px);
+
+    justify-content: center;
+    align-content: center;
+}
+
+.x3 {
+    width: 60px;
+    height: 60px;
+
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(3, 10px);
+    grid-template-rows: repeat(3, 10px);
+
+    justify-content: center;
+    align-content: center;
+}
+
+.x2 {
+    width: 60px;
+    height: 60px;
+
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(2, 10px);
+    grid-template-rows: repeat(2, 10px);
+
+    justify-content: center;
+    align-content: center;
+}
+
+.x4 .pixel, .x3 .pixel, .x2 .pixel {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+#board {
+    position: absolute;
+
+    min-width: 200px;
+    min-height: 24px;
+
     display: grid;
     grid-template-columns: repeat(10, 1fr);
     gap: 2px;
@@ -29,9 +193,25 @@ body {
     box-shadow: 4px 4px 12px 1px rgba(220, 220, 220, 0.2);
 }
 
-.board:before {
-    content: "";
+.loading {
     position: absolute;
+    width: 200px;
+    left: 50%;
+    margin-left: -100px;
+    text-align: center;
+    font-family: 'Lobster', cursive;
+    font-size: 2rem;
+    font-weight: bolder;
+    background: linear-gradient(to right, #0034e1, #00c4b0 80%);
+    text-shadow: 4px 4px 12px rgb(0 196 176 / 40%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    user-select: none;
+}
+
+#board:before {
+    position: absolute;
+    content: "";
     top: 0;
     right: 0;
     bottom: 0;
@@ -47,6 +227,10 @@ body {
     height: 20px;
     border-radius: 4px;
     transition: transform ease .1s;
+}
+
+.pixel.q-empty {
+    opacity: 0;
 }
 
 .pixel.empty {
