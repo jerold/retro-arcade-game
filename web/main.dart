@@ -249,7 +249,7 @@ void _tick() async {
       print('Game Over');
       _reset();
     }
-    _printScoreAndQueue();
+    // _printScoreAndQueue();
   }
 
   _paint();
