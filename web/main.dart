@@ -35,7 +35,7 @@ var _q = freshQueue();
 DecisionTree _ai;
 
 // lines that should be cleaned up
-var _tetrisLines = <int>[];
+var _lineClears = <int>[];
 var _score = 0;
 
 // current piece details: index, x, y, and rotation
@@ -90,15 +90,15 @@ void _paint() async {
   final divs = _boardElement.children;
 
   // marks pieces as being removed because their line was cleared
-  final tetris = <bool>[];
+  final linesWithClears = <bool>[];
   for (var y = 0; y < board_y; y++) {
     for (var x = 0; x < board_x; x++) {
-      tetris.add(_tetrisLines.contains(y));
+      linesWithClears.add(_lineClears.contains(y));
     }
   }
 
   for (var i = 0; i < divs.length; i++) {
-    divs[i].className = 'pixel ${pixelClassName(pixels[i])} ${tetris[i] ? "remove" : ""}';
+    divs[i].className = 'pixel ${pixelClassName(pixels[i])} ${linesWithClears[i] ? "remove" : ""}';
   }
 
   _paintScore();
@@ -208,7 +208,7 @@ void _scheduleAutopilot() async {
 }
 
 void _auto() async {
-  if (_ai != null && _ai.valid && _tetrisLines.isEmpty) {
+  if (_ai != null && _ai.valid && _lineClears.isEmpty) {
     if (_r % 4 != _ai.r) {
       _rotatePiece();
     } else if (_x > _ai.x) {
@@ -231,17 +231,17 @@ void _updateAI() {
 // progresses the board state on an interval
 void _tick() async {
   _tickTimer?.cancel();
-  _squashEmptyTetrisLines();
+  _squashLineClears();
   if (isValid(_x, _y + 1, _r, _i, _b)) {
     _y++;
   } else {
     _b = boardWithPiece(_x, _y, _r, _i, _b);
-    _emptyTetrisLines();
+    _updateScore();
     _dequeue();
     _enqueue();
 
     if (autopilot) {
-      _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+      _ai = DecisionTree.head(boardWithLinesSquashed(_b, _lineClears), _q);
     }
 
     _resetPieceTransforms();
@@ -256,24 +256,20 @@ void _tick() async {
   _scheduleTick();
 }
 
-void _printScoreAndQueue() {
-  print('${piece_avatars[_q.first]} ${_q.sublist(1).map((p) => piece_avatars[p])} $_score');
-}
-
 // empty out rows that have no empty pixels and update score
-void _emptyTetrisLines() {
-  _tetrisLines = scoringLines(_b);
-  if (_tetrisLines.isNotEmpty) {
-    // _b = boardWithLinesEmptied(_b, _tetrisLines);
-    _score = _score + scoreForLines(_tetrisLines.length);
+void _updateScore() {
+  _lineClears = lineClears(_b);
+  if (_lineClears.isNotEmpty) {
+    // _b = boardWithLinesEmptied(_b, _lineClears);
+    _score = _score + scoreForLines(_lineClears.length);
   }
 }
 
 // any emptied lines are removed and lines above them shift down
-void _squashEmptyTetrisLines() {
-  if (_tetrisLines.isNotEmpty) {
-    _b = boardWithLinesSquashed(_b, _tetrisLines);
-    _tetrisLines.clear();
+void _squashLineClears() {
+  if (_lineClears.isNotEmpty) {
+    _b = boardWithLinesSquashed(_b, _lineClears);
+    _lineClears.clear();
   }
 }
 
@@ -362,7 +358,7 @@ void _togglePause() {
 void _toggleAutopilot() {
   autopilot = !autopilot;
   if (autopilot) {
-    _ai = DecisionTree.head(boardWithLinesSquashed(_b, _tetrisLines), _q);
+    _ai = DecisionTree.head(boardWithLinesSquashed(_b, _lineClears), _q);
     _scheduleAutopilot();
   } else {
     _autoTimer?.cancel();
@@ -499,8 +495,8 @@ bool yOnBoard(int y) => y >= 0 && y < board_y;
 
 bool xOnBoard(int x) => x >= 0 && x < board_x;
 
-// returns the row indexes that are complete and can be removed;
-List<int> scoringLines(List<List<int>> b) {
+// returns the row indexes that are complete and can be scored and removed;
+List<int> lineClears(List<List<int>> b) {
   final l = <int>[];
   for (var y = 0; y < board_y; y++) {
     var clearLine = true;
@@ -815,7 +811,7 @@ class DecisionTree {
       _valid = true;
       final y = maxValidY(_ox, 0, _or, i, b);
       _result = boardWithPiece(_ox, y, _or, i, b);
-      final l = scoringLines(_result);
+      final l = lineClears(_result);
       _score = scoreForLines(l.length);
       _result = boardWithLinesSquashed(_result, l);
       _headspace = headspace(_result);
