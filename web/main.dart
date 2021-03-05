@@ -249,7 +249,6 @@ void _tick() async {
       print('Game Over');
       _reset();
     }
-    // _printScoreAndQueue();
   }
 
   _paint();
@@ -260,7 +259,6 @@ void _tick() async {
 void _updateScore() {
   _lineClears = lineClears(_b);
   if (_lineClears.isNotEmpty) {
-    // _b = boardWithLinesEmptied(_b, _lineClears);
     _score = _score + scoreForLines(_lineClears.length);
   }
 }
@@ -334,11 +332,11 @@ void _onKeyDown(KeyboardEvent e) {
       _toggleAutopilot();
       break;
     case KeyCode.NUM_PLUS:
-    case KeyCode.EQUALS: // plus
+    case KeyCode.EQUALS: // lazy plus
       _changeSpeed(-ms_inc);
       break;
     case KeyCode.NUM_MINUS:
-    case KeyCode.DASH: // minus
+    case KeyCode.DASH: // lazy minus
       _changeSpeed(ms_inc);
       break;
     default:
