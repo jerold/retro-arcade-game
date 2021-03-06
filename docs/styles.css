@@ -40,17 +40,17 @@ body {
 }
 
 @keyframes bounce {
-    0%{
-      transform: scale(1) rotate3d(0);
+    0% {
+        transform: scale(1) rotate3d(0);
     }
-    10%{
+    10% {
         transform: scale(1.1) rotate3d(0.1, 0, 0, .5rad);
     }
-    100%{
-      transform: scale(1) rotate3d(0);
+    100% {
+        transform: scale(1) rotate3d(0);
     }
-  }
-  
+}
+
 .queue {
     position: absolute;
     display: grid;
@@ -58,16 +58,6 @@ body {
     gap: 2px;
     margin-left: 320px;
     margin-top: -340px;
-}
-
-@media only screen and (min--moz-device-pixel-ratio: 2),
-only screen and (-o-min-device-pixel-ratio: 2/1),
-only screen and (-webkit-min-device-pixel-ratio: 2),
-only screen and (min-device-pixel-ratio: 2) {
-    .queue {
-        margin-left: 160px;
-        margin-top: -170px;
-    }
 }
 
 #q1 {
@@ -82,7 +72,12 @@ only screen and (min-device-pixel-ratio: 2) {
     opacity: 40%;
 }
 
-#q2.x4 .pixel, #q2.x3 .pixel, #q2.x2 .pixel, #q1.x4 .pixel, #q1.x3 .pixel, #q1.x2 .pixel {
+#q2.x4 .pixel,
+#q2.x3 .pixel,
+#q2.x2 .pixel,
+#q1.x4 .pixel,
+#q1.x3 .pixel,
+#q1.x2 .pixel {
     animation-name: shift-up;
     animation-duration: 500ms;
     animation-timing-function: ease-in-out;
@@ -90,15 +85,17 @@ only screen and (min-device-pixel-ratio: 2) {
 }
 
 @keyframes shift-up {
-    0%{
+    0% {
         margin-top: 60px;
     }
-    100%{
+    100% {
         margin-top: 0px;
     }
-  }
+}
 
-#q3.x4 .pixel, #q3.x3 .pixel, #q3.x2 .pixel{
+#q3.x4 .pixel,
+#q3.x3 .pixel,
+#q3.x2 .pixel {
     animation-name: flip-in;
     animation-duration: 500ms;
     animation-timing-function: ease-in-out;
@@ -106,17 +103,17 @@ only screen and (min-device-pixel-ratio: 2) {
 }
 
 @keyframes flip-in {
-    0%{
+    0% {
         margin-top: 60px;
         transform: scale(0.1);
         opacity: 0;
     }
-    100%{
+    100% {
         margin-top: 0px;
         transform: scale(1);
         opacity: 1;
     }
-  }
+}
 
 .remove {
     animation-name: flip-out;
@@ -126,25 +123,23 @@ only screen and (min-device-pixel-ratio: 2) {
 }
 
 @keyframes flip-out {
-    0%{
+    0% {
         transform: scale(1);
         opacity: 1;
     }
-    100%{
+    100% {
         transform: scale(0.1);
         opacity: 0;
     }
-  }
+}
 
 .x4 {
     width: 60px;
     height: 60px;
-
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(4, 10px);
     grid-template-rows: repeat(4, 10px);
-
     justify-content: center;
     align-content: center;
 }
@@ -152,12 +147,10 @@ only screen and (min-device-pixel-ratio: 2) {
 .x3 {
     width: 60px;
     height: 60px;
-
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(3, 10px);
     grid-template-rows: repeat(3, 10px);
-
     justify-content: center;
     align-content: center;
 }
@@ -165,17 +158,17 @@ only screen and (min-device-pixel-ratio: 2) {
 .x2 {
     width: 60px;
     height: 60px;
-
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(2, 10px);
     grid-template-rows: repeat(2, 10px);
-
     justify-content: center;
     align-content: center;
 }
 
-.x4 .pixel, .x3 .pixel, .x2 .pixel {
+.x4 .pixel,
+.x3 .pixel,
+.x2 .pixel {
     display: block;
     width: 10px;
     height: 10px;
@@ -184,10 +177,8 @@ only screen and (min-device-pixel-ratio: 2) {
 
 #board {
     position: absolute;
-
     min-width: 200px;
     min-height: 24px;
-
     display: grid;
     grid-template-columns: repeat(10, 1fr);
     gap: 2px;
