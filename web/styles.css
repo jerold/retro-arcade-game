@@ -293,6 +293,7 @@ only screen and (min-device-pixel-ratio: 2) {
     right: 10px;
     opacity: 80%;
     transition: transform ease-in-out .2s;
+    user-select: none;
 }
 
 .github-link:hover {
