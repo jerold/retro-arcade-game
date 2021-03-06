@@ -22,6 +22,7 @@ class Game {
   // lines that should be cleaned up
   var _lineClears = <int>[];
   var _score = 0;
+  var _highScore = 0;
 
   // current piece details: index, x, y, and rotation
   int get _i => _q.first;
@@ -32,6 +33,7 @@ class Game {
   // DOM Element the board is mounted into
   Element _boardElement;
   Element _scoreElement;
+  Element _highScoreElement;
   final _queueElements = <Element>[];
   bool _queueChanged = true;
 
@@ -49,6 +51,7 @@ class Game {
     parentElement.innerHtml = '''
 <div id="board"></div>
 <div id="score"></div>
+<div id="high-score"></div>
 <div class="queue">
     <div id="q1"></div>
     <div id="q2"></div>
@@ -56,6 +59,7 @@ class Game {
 </div>''';
 
     _scoreElement = parentElement.querySelector('#score');
+    _highScoreElement = parentElement.querySelector('#high-score');
     _boardElement = parentElement.querySelector('#board');
     _queueElements.addAll([
       parentElement.querySelector('#q1'),
@@ -109,6 +113,8 @@ class Game {
 
   String _scoreText() => 'Score: $_score';
 
+  String _highScoreText() => 'Highest: $_highScore';
+
   void _paintScore() async {
     final scoreText = _scoreText();
     if (_scoreElement.innerText != scoreText) {
@@ -117,6 +123,16 @@ class Game {
         _scoreElement.classes.add(score_bounce_class);
         await Future.delayed(Duration(milliseconds: 400));
         _scoreElement.classes.remove(score_bounce_class);
+      }
+    }
+
+    final highScoreText = _highScoreText();
+    if (_highScore != 0 && _highScoreElement.innerText != highScoreText) {
+      _highScoreElement.innerText = highScoreText;
+      if (_highScore != 0 && !_highScoreElement.classes.contains(score_bounce_class)) {
+        _highScoreElement.classes.add(score_bounce_class);
+        await Future.delayed(Duration(milliseconds: 400));
+        _highScoreElement.classes.remove(score_bounce_class);
       }
     }
   }
@@ -153,6 +169,9 @@ class Game {
 
   // clear the board, score, queue, and ai
   void _reset() {
+    if (_score > 0) {
+      _highScore = max(_score, _highScore);
+    }
     _score = 0;
     _b = emptyBoard();
     _q = _freshQueue();

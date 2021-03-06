@@ -20,7 +20,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 60px;
+    padding: 80px;
 
     font-family: 'Lobster', cursive;
     font-size: 2rem;
@@ -66,6 +66,21 @@ body {
     font-weight: bolder;
     background: linear-gradient(to right, #0034e1, #00c4b0 80%);
     text-shadow: 4px 4px 12px rgb(0 196 176 / 40%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    user-select: none;
+}
+
+#high-score {
+    position: absolute;
+    margin-top: 330px;
+    top: 50%;
+    text-align: right;
+    font-family: 'Lobster', cursive;
+    font-size: 3rem;
+    font-weight: bolder;
+    background: linear-gradient(to right, #e10000, #ffc300 80%);
+    text-shadow: 4px 4px 12px rgba(255 195 0 / 40%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     user-select: none;
