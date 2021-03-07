@@ -1,82 +1,62 @@
 import 'dart:async';
-import 'dart:html';
+import 'dart:math';
 
 import 'package:retro_arcade_game/src/decision_tree.dart';
 import 'package:retro_arcade_game/src/util.dart';
 import 'package:retro_arcade_game/src/game_state.dart';
 
-const Map<int, GameInput> player_one_bindings = {
-  // Game Setting controls
-  KeyCode.ESC: GameInput.reset,
-  KeyCode.P: GameInput.togglePause,
-  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
-  KeyCode.EQUALS: GameInput.increaseSpeed,
-  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
-  KeyCode.DASH: GameInput.decreaseSpeed,
-  // Player 2 piece controls
-  KeyCode.SPACE: GameInput.dropPiece,
-  KeyCode.W: GameInput.rotatePiece,
-  KeyCode.A: GameInput.movePieceLeft,
-  KeyCode.D: GameInput.movePieceRight,
-  KeyCode.S: GameInput.movePieceDown,
-};
-
-const Map<int, GameInput> player_two_bindings = {
-  // Player 2 piece controls
-  KeyCode.ENTER: GameInput.dropPiece,
-  KeyCode.UP: GameInput.rotatePiece,
-  KeyCode.LEFT: GameInput.movePieceLeft,
-  KeyCode.RIGHT: GameInput.movePieceRight,
-  KeyCode.DOWN: GameInput.movePieceDown,
-};
-
 abstract class GameInputController {
-  final StreamController<GameInput> _controller = StreamController<GameInput>.broadcast();
+  final StreamController<GameInput> _inputStreamController = StreamController<GameInput>.broadcast();
 
-  Stream<GameInput> get stream => _controller.stream;
+  Stream<GameInput> get inputStream => _inputStreamController.stream;
 
   bool _isPaused = false;
 
   int _tickIntervalMs = default_auto_tick_ms;
 
-  void pausedChange(bool isPaused) {
+  // GAME INTERFACE
+
+  // called by game when setting is changed
+  void setPaused(bool isPaused) {
     _isPaused = isPaused;
     handlePausedChanged(isPaused);
   }
 
-  void speedChange(int deltaMs) {
+  // called by game when setting is changed
+  void changeSpeed(int deltaMs) {
     _tickIntervalMs += deltaMs;
     print('Speed set to tick:${_tickIntervalMs}ms');
   }
 
-  void press(GameInput input) => _controller.add(input);
+  void changeBoard(List<List<int>> board, List<int> queue) {
+    handleBoardChanged(board, queue);
+  }
 
+  void changePiece(int x, int y, int r) {
+    handlePieceChanged(x, y, r);
+  }
+
+  void gameStarted() {
+    handleGameStarted();
+  }
+
+  // CONTROLLER INTERFACE
+
+  // Generates Input for the game to respond to
+  void input(GameInput i) => _inputStreamController.add(i);
+
+  // Hook for Controllers to respond to
   void handlePausedChanged(bool isPaused) {}
 
-  // assumes piece is reset to defaults when the board changes
-  void boardChanged(List<List<int>> board, List<int> queue, int clears) {}
+  // called by game: assumes piece is reset to defaults when the board changes
+  void handleBoardChanged(List<List<int>> board, List<int> queue) {}
 
-  // between board updates the piece is moved around until it locks
-  void pieceChanged(int x, int y, int r) {}
-}
+  // called by game: between board updates the piece is moved around until it locks
+  void handlePieceChanged(int x, int y, int r) {}
 
-// binds user key presses to specific game controls
-class UserInput extends GameInputController {
-  final Map<int, GameInput> _bindings;
+  void handleGameStarted() {}
 
-  UserInput(this._bindings) {
-    document.body.onKeyDown.listen(_onKeyDown);
-  }
-
-  factory UserInput.playerOne() => UserInput(player_one_bindings);
-
-  factory UserInput.playerTwo() => UserInput(player_two_bindings);
-
-  void _onKeyDown(KeyboardEvent e) {
-    if (_bindings.containsKey(e.keyCode)) {
-      press(_bindings[e.keyCode]);
-    }
-  }
+  void handleGameEnded(int score) {}
 }
 
 // used to let the game know it's controller has plans
@@ -86,16 +66,36 @@ class PlanningSomething {
   int r;
 }
 
+class PieceMove {
+  final int x;
+  final int r;
+
+  PieceMove(this.x, this.r);
+}
+
+mixin Immediate {
+  final StreamController<PieceMove> _moveStreamController = StreamController<PieceMove>.broadcast();
+
+  // GAME INTERFACE
+
+  Stream<PieceMove> get moveStream => _moveStreamController.stream;
+
+  // CONTROLLER INTERFACE
+
+  void move(int x, int r) => _moveStreamController.add(PieceMove(x, r));
+}
+
 // hooks an ai up to a board and translates the AI's output to game controls
 class DecisionTreeInput extends GameInputController with PlanningSomething {
   GameState _state;
   DecisionTree _tree;
+  int _depth;
 
   Timer _tickTimer;
-  int _animationFrame;
+  bool _paused = false;
 
-  DecisionTreeInput() {
-    _scheduleTick();
+  DecisionTreeInput({int depth}) {
+    _depth = depth ?? default_max_tree_depth;
   }
 
   @override
@@ -106,6 +106,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
 
   @override
   void handlePausedChanged(bool isPaused) {
+    _paused = isPaused;
     if (isPaused) {
       _cancelTick();
     } else {
@@ -114,45 +115,86 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   }
 
   @override
-  void boardChanged(List<List<int>> board, List<int> queue, int clears) {
+  void handleBoardChanged(List<List<int>> board, List<int> queue) {
     _state = GameState(board, queue);
-    _tree = DecisionTree.head(board, queue);
+    _tree = DecisionTree.head(board, queue, _depth);
   }
 
   @override
-  void pieceChanged(int x, int y, int r) {
+  void handlePieceChanged(int x, int y, int r) {
     _state.updatePiece(x, y, r);
   }
 
-  void _scheduleTick() async {
-    _cancelTick();
+  @override
+  void handleGameStarted() {
+    _scheduleTick();
+  }
 
-    if (_tickIntervalMs < min_tick_ms) {
-      _animationFrame = window.requestAnimationFrame(_onAnimationFrame);
-    } else {
-      _tickTimer = Timer(Duration(milliseconds: _tickIntervalMs), _tick);
+  @override
+  void handleGameEnded(int score) {
+    _cancelTick();
+  }
+
+  void _scheduleTick() {
+    if (!_paused) {
+      _cancelTick();
+      _tickTimer = Timer(Duration(milliseconds: max(min_tick_ms, _tickIntervalMs)), _tick);
     }
   }
 
   void _cancelTick() {
-    window.cancelAnimationFrame(_animationFrame);
     _tickTimer?.cancel();
   }
-
-  void _onAnimationFrame(_) => _tick();
 
   void _tick() {
     if (!_isPaused && _tree != null && _tree.valid) {
       if (_state.r % piece_rotations != _tree.r) {
-        press(GameInput.rotatePiece);
+        input(GameInput.rotatePiece);
       } else if (_state.x > _tree.x) {
-        press(GameInput.movePieceLeft);
+        input(GameInput.movePieceLeft);
       } else if (_state.x < _tree.x) {
-        press(GameInput.movePieceRight);
+        input(GameInput.movePieceRight);
       } else {
-        press(GameInput.dropPiece);
+        input(GameInput.dropPiece);
       }
     }
     _scheduleTick();
   }
+}
+
+class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
+  final int _cycles;
+  int _i = 0;
+
+  final StreamController<GameState> _outController = StreamController<GameState>.broadcast();
+  Stream<GameState> get output => _outController.stream;
+
+  final Completer _completer = Completer();
+  Future get finish => _completer.future;
+
+  int get branching => DecisionTree.branchCount;
+
+  ImmediateDecisionTreeInput(this._cycles, {int depth}) : super(depth: depth);
+
+  @override
+  void handleBoardChanged(List<List<int>> board, List<int> queue) {
+    if (!_completer.isCompleted) {
+      if (_i < _cycles) {
+        _i++;
+        super.handleBoardChanged(board, queue);
+        if (_tree.valid) {
+          move(_tree.x, _tree.r);
+          _outController.add(GameState(board, queue)..updatePiece(_tree.x, 0, _tree.r));
+        }
+      } else {
+        _completer.complete();
+      }
+    }
+  }
+
+  @override
+  void handleGameStarted() {}
+
+  @override
+  void _tick() {}
 }

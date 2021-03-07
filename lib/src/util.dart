@@ -17,7 +17,7 @@ const shadow_value = -1;
 const predict_value = -2;
 
 // ai's search tree depth
-const int maxTreeDepth = 1;
+const int default_max_tree_depth = 1;
 
 // rate at which the game progresses
 const ms_inc = 50;
@@ -29,7 +29,7 @@ const min_tick_ms = 20;
 const default_game_tick_ms = 400;
 
 // initial default speed for the ai actions
-const default_auto_tick_ms = 150;
+const default_auto_tick_ms = 320;
 
 enum GameInput {
   reset,
@@ -43,34 +43,6 @@ enum GameInput {
   togglePause,
   increaseSpeed,
   decreaseSpeed,
-}
-
-String arrayAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
-
-String pixelAsInnerHtml(int pixel) => '<div class="pixel ${pixelClassName(pixel)}"></div>';
-
-String pieceSizeClassName(int size) {
-  switch (size) {
-    case 2:
-      return 'x2';
-    case 4:
-      return 'x4';
-    default:
-      return 'x3';
-  }
-}
-
-String pixelClassName(int pixel, {bool queuePixel = false}) {
-  switch (pixel) {
-    case 0:
-      return queuePixel ? 'q-empty' : 'empty';
-    case -1:
-      return 'shadow';
-    case -2:
-      return 'predict';
-    default:
-      return 'piece-${pixel}';
-  }
 }
 
 // maps the score fore completing the given number of lines
@@ -354,6 +326,12 @@ final piece_avatars = <String>[
   '⠼',
   '⠲⠂',
 ];
+
+// rotation values used while Branching to explore game space
+const rs = [0, 1, 2, 3];
+
+// x values used while Branching to explore game space
+const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 // list of 2d arrays encoding each pieces' shape and color
 final pieces = <List<List<int>>>[

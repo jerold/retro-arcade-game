@@ -5,10 +5,6 @@ class DecisionTree {
   static int _branchCount = 0;
   static int get branchCount => _branchCount;
 
-  // rotation and x values used while Branching to explore game space
-  static const rs = [0, 1, 2, 3];
-  static const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
-
   // For Branch: the x actions taken to produce _result
   // For Head: the x action of the branch with the highest fitness
   int _ox;
@@ -40,7 +36,7 @@ class DecisionTree {
 
   // head returns a score for it's possible children x and r values
   // from its top scoring branch;
-  DecisionTree.head(List<List<int>> b, List<int> q) {
+  DecisionTree.head(List<List<int>> b, List<int> q, int maxDepth) {
     _branchCount = 0;
     _result = b;
     _score = 0;
@@ -50,7 +46,7 @@ class DecisionTree {
     if (q.isNotEmpty) {
       for (final br in rs) {
         for (final bx in xs) {
-          final b = DecisionTree(bx, br, q, 0, _result);
+          final b = DecisionTree(bx, br, q, 0, maxDepth, _result);
           if (b.valid) {
             _branches.add(b);
           }
@@ -75,7 +71,7 @@ class DecisionTree {
     }
   }
 
-  DecisionTree(this._ox, this._or, List<int> q, int depth, List<List<int>> b) {
+  DecisionTree(this._ox, this._or, List<int> q, int depth, int maxDepth, List<List<int>> b) {
     _branchCount++;
     if (q.isNotEmpty && depth < q.length && isValid(_ox, 0, _or, q[depth], b)) {
       final i = q[depth];
@@ -88,10 +84,10 @@ class DecisionTree {
       _headspace = headspace(_result);
       _voids = voids(_result);
 
-      if (q.length > depth + 1 && depth + 1 < maxTreeDepth) {
+      if (q.length > depth + 1 && depth + 1 < maxDepth) {
         for (final br in rs) {
           for (final bx in xs) {
-            final b = DecisionTree(bx, br, q, depth + 1, _result);
+            final b = DecisionTree(bx, br, q, depth + 1, maxDepth, _result);
             if (b.valid) {
               _branches.add(b);
             }

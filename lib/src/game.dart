@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:html';
 import 'dart:math';
 
+import 'package:retro_arcade_game/arcade_game.dart';
 import 'package:retro_arcade_game/src/game_input_controller.dart';
+import 'package:retro_arcade_game/src/game_renderer.dart';
 import 'package:retro_arcade_game/src/util.dart';
-
-// className used to trigger the bounce animation for scores
-const score_bounce_class = 'bounce-score';
 
 class Game {
   // flag for pausing the game
@@ -22,7 +20,15 @@ class Game {
   // lines that should be cleaned up
   var _lineClears = <int>[];
   var _score = 0;
+  int get score => _score;
+
+  // highest score across all games played with this instance
   var _highScore = 0;
+  int get highScore => _highScore;
+
+  // number of games played
+  var _plays = 0;
+  int get plays => _plays;
 
   // current piece details: index, x, y, and rotation
   int get _i => _q.first;
@@ -30,133 +36,30 @@ class Game {
   int _x;
   int _r;
 
-  // DOM Element the board is mounted into
-  Element _boardElement;
-  Element _scoreElement;
-  Element _highScoreElement;
-  final _queueElements = <Element>[];
-  bool _queueChanged = true;
+  // Handles all the rendering details for the Game
+  GameRenderer _renderer;
 
+  // Provides User or AI input to be applied to the game.
   GameInputController _controller;
 
-  Game(String selectorId, {GameInputController controller}) {
+  Game({GameInputController controller, GameRenderer renderer}) {
     _controller = controller ?? DecisionTreeInput();
-    controller.stream.listen(_handleInput);
-
-    final parentElement = querySelector(selectorId);
-    if (parentElement == null) {
-      throw Exception('Unable to find component to mount Game into "$selectorId"');
+    _controller.inputStream.listen(_handleInput);
+    if (_controller is Immediate) {
+      // ticking on a timed interval won't be required
+      (_controller as Immediate).moveStream.listen(_handleMove);
+      _paused = true;
     }
 
-    parentElement.innerHtml = '''
-<div id="board"></div>
-<div id="score"></div>
-<div id="high-score"></div>
-<div class="queue">
-    <div id="q1"></div>
-    <div id="q2"></div>
-    <div id="q3"></div>
-</div>''';
-
-    _scoreElement = parentElement.querySelector('#score');
-    _highScoreElement = parentElement.querySelector('#high-score');
-    _boardElement = parentElement.querySelector('#board');
-    _queueElements.addAll([
-      parentElement.querySelector('#q1'),
-      parentElement.querySelector('#q2'),
-      parentElement.querySelector('#q3'),
-    ]);
-
-    _boardElement.innerHtml = arrayAsInnerHtml(emptyBoard());
+    _renderer = renderer ?? NoopRenderer();
+    _renderer.initializeBoard(_b);
   }
 
-  void start() async {
+  void start() {
     _reset();
+    _controller.gameStarted();
     if (!_paused) {
       _scheduleTick();
-    }
-  }
-
-  // updates the DOM to reflect the current game state
-  void _paint() async {
-    var composite = boardCopy(_b);
-
-    // show predictions when possibilities have been generated
-    if (_controller is PlanningSomething) {
-      final ai = _controller as PlanningSomething;
-      final predictY = maxValidY(ai.x, _y, ai.r, _i, _b);
-      composite = merged(composite, boardCopy(pieceMask(ai.x, predictY, ai.r, _i), mask: predict_value));
-    }
-
-    final shadowY = maxValidY(_x, _y, _r, _i, _b);
-    composite = merged(composite, boardCopy(pieceMask(_x, shadowY, _r, _i), mask: shadow_value));
-
-    composite = merged(composite, pieceMask(_x, _y, _r, _i));
-    final pixels = composite.expand((row) => row).toList();
-    final divs = _boardElement.children;
-
-    // marks pieces as being removed because their line was cleared
-    final linesWithClears = <bool>[];
-    for (var y = 0; y < board_y; y++) {
-      for (var x = 0; x < board_x; x++) {
-        linesWithClears.add(_lineClears.contains(y));
-      }
-    }
-
-    for (var i = 0; i < divs.length; i++) {
-      divs[i].className = 'pixel ${pixelClassName(pixels[i])} ${linesWithClears[i] ? "remove" : ""}';
-    }
-
-    _paintScore();
-    _paintQueue();
-  }
-
-  String _scoreText() => 'Score: $_score';
-
-  String _highScoreText() => 'Highest: $_highScore';
-
-  void _paintScore() async {
-    final scoreText = _scoreText();
-    if (_scoreElement.innerText != scoreText) {
-      _scoreElement.innerText = scoreText;
-      if (_score != 0 && !_scoreElement.classes.contains(score_bounce_class)) {
-        _scoreElement.classes.add(score_bounce_class);
-        await Future.delayed(Duration(milliseconds: 400));
-        _scoreElement.classes.remove(score_bounce_class);
-      }
-    }
-
-    final highScoreText = _highScoreText();
-    if (_highScore != 0 && _highScoreElement.innerText != highScoreText) {
-      _highScoreElement.innerText = highScoreText;
-      if (_highScore != 0 && !_highScoreElement.classes.contains(score_bounce_class)) {
-        _highScoreElement.classes.add(score_bounce_class);
-        await Future.delayed(Duration(milliseconds: 400));
-        _highScoreElement.classes.remove(score_bounce_class);
-      }
-    }
-  }
-
-  void _paintQueue() async {
-    if (_queueChanged) {
-      _queueChanged = false;
-      for (var i = 0; i < _queueElements.length; i++) {
-        _paintQueuePiece(i);
-      }
-    }
-  }
-
-  void _paintQueuePiece(int i) {
-    final element = _queueElements[i];
-    final piece = pieces[_q[i + 1]];
-
-    element.className = 'on-deck ${pieceSizeClassName(piece.length)}';
-    element.innerHtml = arrayAsInnerHtml(piece);
-
-    final pixels = piece.expand((row) => row).toList();
-    final divs = element.children;
-    for (var i = 0; i < divs.length; i++) {
-      divs[i].className = 'pixel ${pixelClassName(pixels[i], queuePixel: true)}';
     }
   }
 
@@ -169,27 +72,32 @@ class Game {
 
   // clear the board, score, queue, and ai
   void _reset() {
-    if (_score > 0) {
-      _highScore = max(_score, _highScore);
-    }
+    _plays++;
+    _highScore = max(_score, _highScore);
     _score = 0;
     _b = emptyBoard();
-    _q = _freshQueue();
+    _q = freshQueue();
     _lineClears.clear();
     // fire a board update to let the AI know what the initial board state is
     _resetPieceTransforms();
-    _controller.boardChanged(_b, _q, 0);
+    _controller.changeBoard(_b, _q);
+
     _paint();
+    _scheduleTick();
   }
 
+  void _paint() => _renderer.paint(_x, _y, _r, _i, _b, _q, _lineClears, _score, _highScore, _controller);
+
   Timer _tickTimer;
-  void _scheduleTick() async {
-    _tickTimer?.cancel();
-    _tickTimer = Timer(Duration(milliseconds: max(20, _tick_interval_ms)), _tick);
+  void _scheduleTick() {
+    if (!_paused) {
+      _tickTimer?.cancel();
+      _tickTimer = Timer(Duration(milliseconds: max(min_tick_ms, _tick_interval_ms)), _tick);
+    }
   }
 
   // progresses the board state on an interval
-  void _tick() async {
+  void _tick() {
     _tickTimer?.cancel();
     _squashLineClears();
     if (isValid(_x, _y + 1, _r, _i, _b)) {
@@ -200,10 +108,10 @@ class Game {
       _dequeue();
       _enqueue();
       _resetPieceTransforms();
-      _controller.boardChanged(boardWithLinesSquashed(_b, _lineClears), _q, _lineClears.length);
+      _controller.changeBoard(boardWithLinesSquashed(_b, _lineClears), _q);
       if (!isValid(_x, _y, _r, _i, _b)) {
-        print('Game Over');
         _reset();
+        return;
       }
     }
 
@@ -230,18 +138,11 @@ class Game {
   // add a piece index to the end of the queue
   void _enqueue() {
     _q.add(rand.nextInt(pieces.length));
-    _queueChanged = true;
   }
 
   // remove a piece index from the front of the queue
   void _dequeue() {
     _q.removeAt(0);
-    _queueChanged = true;
-  }
-
-  List<int> _freshQueue() {
-    _queueChanged = true;
-    return freshQueue();
   }
 
   void _handleInput(GameInput input) {
@@ -277,6 +178,15 @@ class Game {
     _paint();
   }
 
+  // move represents final intended x and r for piece, apply and follow with a tick.
+  void _handleMove(PieceMove move) {
+    _x = move.x;
+    _r = move.r;
+    // an unsquashed line could cause a maxY to be invalidated at the top of a tick (when all lines shift down opening up space)
+    _squashLineClears();
+    _dropPiece();
+  }
+
   void _togglePause() {
     _paused = !_paused;
     if (_paused) {
@@ -284,21 +194,21 @@ class Game {
     } else {
       _scheduleTick();
     }
-    _controller.pausedChange(_paused);
+    _controller.setPaused(_paused);
     print(_paused ? 'Paused' : 'Unpaused');
   }
 
   // change the rate a piece falls
   void _changeSpeed(int deltaMs) {
     _tick_interval_ms += deltaMs;
-    _controller.speedChange(deltaMs);
+    _controller.changeSpeed(deltaMs);
     print('Speed set to tick:${_tick_interval_ms}ms');
   }
 
   // current piece is shifted down as far as it can go, and locked in
   void _dropPiece() {
     _y = maxValidY(_x, _y, _r, _i, _b);
-    _controller.pieceChanged(_x, _y, _r);
+    _controller.changePiece(_x, _y, _r);
     _tick();
   }
 
@@ -326,14 +236,14 @@ class Game {
         }
       }
     }
-    _controller.pieceChanged(_x, _y, _r);
+    _controller.changePiece(_x, _y, _r);
   }
 
   // transforms current piece left on the board if possible
   void _movePieceLeft() {
     if (isValid(_x - 1, _y, _r, _i, _b)) {
       _x--;
-      _controller.pieceChanged(_x, _y, _r);
+      _controller.changePiece(_x, _y, _r);
     }
   }
 
@@ -341,7 +251,7 @@ class Game {
   void _movePieceRight() {
     if (isValid(_x + 1, _y, _r, _i, _b)) {
       _x++;
-      _controller.pieceChanged(_x, _y, _r);
+      _controller.changePiece(_x, _y, _r);
     }
   }
 
@@ -349,7 +259,7 @@ class Game {
   void _movePieceDown() {
     if (isValid(_x, _y + 1, _r, _i, _b)) {
       _y++;
-      _controller.pieceChanged(_x, _y, _r);
+      _controller.changePiece(_x, _y, _r);
     }
   }
 }
