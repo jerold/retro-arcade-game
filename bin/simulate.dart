@@ -4,25 +4,14 @@ import 'package:retro_arcade_game/arcade_game.dart';
 
 void main(List<String> arguments) {
   final start = DateTime.now();
-  final logger = Logger();
-  final controller = ImmediateDecisionTreeInput(100, logger.log, depth: 2);
+  final sink = File('pattern.txt').openWrite();
+  final controller = ImmediateDecisionTreeInput(1000, sink.writeln, depth: 2);
   final game = Game(controller: controller)..start();
-  controller.finish.then((_) {
+  controller.finish.then((_) async {
     print('Complete  ${DateTime.now().difference(start).inSeconds}s');
     print('Games:${game.plays}, Score:${game.score}, HighScore:${game.highScore}');
+
+    await sink.flush();
     exit(0);
   });
-}
-
-class Logger {
-  IOSink _sink;
-
-  Logger() {
-    _sink = File('pattern.txt').openWrite();
-  }
-
-  void log(GameState state) {
-    print(state);
-    _sink.writeln(state);
-  }
 }
