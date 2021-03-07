@@ -166,15 +166,14 @@ class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
   final int _cycles;
   int _i = 0;
 
-  final StreamController<GameState> _outController = StreamController<GameState>.broadcast();
-  Stream<GameState> get output => _outController.stream;
-
   final Completer _completer = Completer();
   Future get finish => _completer.future;
 
   int get branching => DecisionTree.branchCount;
 
-  ImmediateDecisionTreeInput(this._cycles, {int depth}) : super(depth: depth);
+  final void Function(GameState) _log;
+
+  ImmediateDecisionTreeInput(this._cycles, this._log, {int depth}) : super(depth: depth);
 
   @override
   void handleBoardChanged(List<List<int>> board, List<int> queue) {
@@ -184,7 +183,7 @@ class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
         super.handleBoardChanged(board, queue);
         if (_tree.valid) {
           move(_tree.x, _tree.r);
-          _outController.add(GameState(board, queue)..updatePiece(_tree.x, 0, _tree.r));
+          _log(GameState(board, queue)..updatePiece(_tree.x, 0, _tree.r));
         }
       } else {
         _completer.complete();
