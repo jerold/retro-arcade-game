@@ -110,6 +110,8 @@ class Game {
       _resetPieceTransforms();
       _controller.changeBoard(boardWithLinesSquashed(_b, _lineClears), _q);
       if (!isValid(_x, _y, _r, _i, _b)) {
+        print('Game Ended! Final Score:$_score');
+        _controller.gameEnded();
         _reset();
         return;
       }
@@ -182,8 +184,6 @@ class Game {
   void _handleMove(PieceMove move) {
     _x = move.x;
     _r = move.r;
-    // an unsquashed line could cause a maxY to be invalidated at the top of a tick (when all lines shift down opening up space)
-    _squashLineClears();
     _dropPiece();
   }
 
@@ -207,6 +207,8 @@ class Game {
 
   // current piece is shifted down as far as it can go, and locked in
   void _dropPiece() {
+    // an unsquashed line could cause a maxY to be invalidated at the top of a tick (when all lines shift down opening up space)
+    _squashLineClears();
     _y = maxValidY(_x, _y, _r, _i, _b);
     _controller.changePiece(_x, _y, _r);
     _tick();

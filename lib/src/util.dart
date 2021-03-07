@@ -5,7 +5,8 @@ import 'dart:math';
 // used to generate new piece indexes in the queue
 final rand = Random();
 
-const piece_rotations = 4;
+// piece rotations repeat in 4 steps
+const piece_rotation_mod = 4;
 
 // board dimensions
 const board_y = 24;
@@ -328,10 +329,21 @@ final piece_avatars = <String>[
 ];
 
 // rotation values used while Branching to explore game space
-const rs = [0, 1, 2, 3];
+// const rs = [0, 1, 2, 3];
 
 // x values used while Branching to explore game space
 const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+
+// list of rotations that do not share symmetry
+final piece_rotations = <List<int>>[
+  [0],
+  [0, 1],
+  [0, 1],
+  [0, 1],
+  [0, 1, 2, 3],
+  [0, 1, 2, 3],
+  [0, 1, 2, 3],
+];
 
 // list of 2d arrays encoding each pieces' shape and color
 final pieces = <List<List<int>>>[

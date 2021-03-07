@@ -43,10 +43,11 @@ class DecisionTree {
     _headspace = headspace(_result);
     _voids = voids(_result);
 
+    final depth = 0;
     if (q.isNotEmpty) {
-      for (final br in rs) {
+      for (final br in piece_rotations[q[depth]]) {
         for (final bx in xs) {
-          final b = DecisionTree(bx, br, q, 0, maxDepth, _result);
+          final b = DecisionTree(bx, br, q, depth, maxDepth, _result);
           if (b.valid) {
             _branches.add(b);
           }
@@ -85,7 +86,7 @@ class DecisionTree {
       _voids = voids(_result);
 
       if (q.length > depth + 1 && depth + 1 < maxDepth) {
-        for (final br in rs) {
+        for (final br in piece_rotations[q[depth]]) {
           for (final bx in xs) {
             final b = DecisionTree(bx, br, q, depth + 1, maxDepth, _result);
             if (b.valid) {

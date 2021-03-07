@@ -40,6 +40,10 @@ abstract class GameInputController {
     handleGameStarted();
   }
 
+  void gameEnded() {
+    handleGameEnded();
+  }
+
   // CONTROLLER INTERFACE
 
   // Generates Input for the game to respond to
@@ -56,7 +60,7 @@ abstract class GameInputController {
 
   void handleGameStarted() {}
 
-  void handleGameEnded(int score) {}
+  void handleGameEnded() {}
 }
 
 // used to let the game know it's controller has plans
@@ -130,11 +134,6 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
     _scheduleTick();
   }
 
-  @override
-  void handleGameEnded(int score) {
-    _cancelTick();
-  }
-
   void _scheduleTick() {
     if (!_paused) {
       _cancelTick();
@@ -148,7 +147,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
 
   void _tick() {
     if (!_isPaused && _tree != null && _tree.valid) {
-      if (_state.r % piece_rotations != _tree.r) {
+      if (_state.r % piece_rotation_mod != _tree.r) {
         input(GameInput.rotatePiece);
       } else if (_state.x > _tree.x) {
         input(GameInput.movePieceLeft);
@@ -182,6 +181,8 @@ class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
         _i++;
         super.handleBoardChanged(board, queue);
         if (_tree.valid) {
+          if (_i % 100 == 0) print('$_i branching:${DecisionTree.branchCount}');
+
           move(_tree.x, _tree.r);
           _log(GameState(board, queue)..updatePiece(_tree.x, 0, _tree.r));
         }
@@ -193,6 +194,11 @@ class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
 
   @override
   void handleGameStarted() {}
+
+  @override
+  void handleGameEnded() {
+    _completer.complete();
+  }
 
   @override
   void _tick() {}

@@ -7,8 +7,10 @@ import 'dart:html';
 import 'package:retro_arcade_game/arcade_game.dart';
 
 void main() {
-  Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-1')).start();
-  Game(renderer: WebRenderer('#game-2')).start();
+  // Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
+  // Game(controller: DecisionTreeInput(depth: 2), renderer: WebRenderer('#game-1')).start();
+  Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
+  Game(renderer: WebRenderer('#game-3')).start();
 }
 
 // className used to trigger the bounce animation for scores
@@ -22,21 +24,28 @@ const Map<int, GameInput> player_one_bindings = {
   KeyCode.EQUALS: GameInput.increaseSpeed,
   KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
   KeyCode.DASH: GameInput.decreaseSpeed,
+  // Player 1 piece controls
+  KeyCode.ENTER: GameInput.dropPiece,
+  KeyCode.UP: GameInput.rotatePiece,
+  KeyCode.LEFT: GameInput.movePieceLeft,
+  KeyCode.RIGHT: GameInput.movePieceRight,
+  KeyCode.DOWN: GameInput.movePieceDown,
+};
+
+const Map<int, GameInput> player_two_bindings = {
+  // Game Setting controls
+  KeyCode.ESC: GameInput.reset,
+  KeyCode.P: GameInput.togglePause,
+  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
+  KeyCode.EQUALS: GameInput.increaseSpeed,
+  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
+  KeyCode.DASH: GameInput.decreaseSpeed,
   // Player 2 piece controls
   KeyCode.SPACE: GameInput.dropPiece,
   KeyCode.W: GameInput.rotatePiece,
   KeyCode.A: GameInput.movePieceLeft,
   KeyCode.D: GameInput.movePieceRight,
   KeyCode.S: GameInput.movePieceDown,
-};
-
-const Map<int, GameInput> player_two_bindings = {
-  // Player 2 piece controls
-  KeyCode.ENTER: GameInput.dropPiece,
-  KeyCode.UP: GameInput.rotatePiece,
-  KeyCode.LEFT: GameInput.movePieceLeft,
-  KeyCode.RIGHT: GameInput.movePieceRight,
-  KeyCode.DOWN: GameInput.movePieceDown,
 };
 
 // binds user key presses to specific game controls
