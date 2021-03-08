@@ -12,7 +12,7 @@ const shadow_value = -1;
 const predict_value = -2;
 
 // ai's search tree depth
-const int default_max_tree_depth = 2;
+const int default_max_tree_depth = 1;
 
 // rate at which the game progresses
 const ms_inc = 50;
