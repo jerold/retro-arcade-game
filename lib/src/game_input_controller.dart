@@ -147,7 +147,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
 
   void _tick() {
     if (!_isPaused && _tree != null && _tree.valid) {
-      if (_state.r % piece_rotation_mod != _tree.r) {
+      if (_state.r % rs.length != _tree.r) {
         input(GameInput.rotatePiece);
       } else if (_state.x > _tree.x) {
         input(GameInput.movePieceLeft);

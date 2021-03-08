@@ -2,12 +2,6 @@ library arcade_utils;
 
 import 'dart:math';
 
-// used to generate new piece indexes in the queue
-final rand = Random();
-
-// piece rotations repeat in 4 steps
-const piece_rotation_mod = 4;
-
 // board dimensions
 const board_y = 24;
 const board_x = 10;
@@ -18,7 +12,7 @@ const shadow_value = -1;
 const predict_value = -2;
 
 // ai's search tree depth
-const int default_max_tree_depth = 1;
+const int default_max_tree_depth = 2;
 
 // rate at which the game progresses
 const ms_inc = 50;
@@ -61,7 +55,10 @@ int scoreForLines(int lineCount) {
   return 0;
 }
 
-List<int> freshQueue() => List<int>.generate(4, (_) => rand.nextInt(pieces.length));
+// used to generate new piece indexes in the queue
+final _rand = Random();
+int randomPieceIndex([_]) => _rand.nextInt(pieces.length);
+List<int> freshQueue() => List<int>.generate(4, randomPieceIndex);
 
 // assuming the board is valid with the piece at a given x find
 // how far the piece can be dropped while still being valid
@@ -329,7 +326,7 @@ final piece_avatars = <String>[
 ];
 
 // rotation values used while Branching to explore game space
-// const rs = [0, 1, 2, 3];
+const rs = [0, 1, 2, 3];
 
 // x values used while Branching to explore game space
 const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];

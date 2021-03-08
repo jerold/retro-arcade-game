@@ -10,21 +10,13 @@ void main() {
   // Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
   // Game(controller: DecisionTreeInput(depth: 2), renderer: WebRenderer('#game-1')).start();
   Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
-  Game(renderer: WebRenderer('#game-3')).start();
+  Game(controller: AIInput(), renderer: WebRenderer('#game-3')).start();
 }
 
 // className used to trigger the bounce animation for scores
 const score_bounce_class = 'bounce-score';
 
 const Map<int, GameInput> player_one_bindings = {
-  // Game Setting controls
-  KeyCode.ESC: GameInput.reset,
-  KeyCode.P: GameInput.togglePause,
-  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
-  KeyCode.EQUALS: GameInput.increaseSpeed,
-  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
-  KeyCode.DASH: GameInput.decreaseSpeed,
-  // Player 1 piece controls
   KeyCode.ENTER: GameInput.dropPiece,
   KeyCode.UP: GameInput.rotatePiece,
   KeyCode.LEFT: GameInput.movePieceLeft,
@@ -33,14 +25,6 @@ const Map<int, GameInput> player_one_bindings = {
 };
 
 const Map<int, GameInput> player_two_bindings = {
-  // Game Setting controls
-  KeyCode.ESC: GameInput.reset,
-  KeyCode.P: GameInput.togglePause,
-  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
-  KeyCode.EQUALS: GameInput.increaseSpeed,
-  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
-  KeyCode.DASH: GameInput.decreaseSpeed,
-  // Player 2 piece controls
   KeyCode.SPACE: GameInput.dropPiece,
   KeyCode.W: GameInput.rotatePiece,
   KeyCode.A: GameInput.movePieceLeft,
@@ -48,11 +32,20 @@ const Map<int, GameInput> player_two_bindings = {
   KeyCode.S: GameInput.movePieceDown,
 };
 
+const Map<int, GameInput> setup_bindings = {
+  KeyCode.ESC: GameInput.reset,
+  KeyCode.P: GameInput.togglePause,
+  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
+  KeyCode.EQUALS: GameInput.increaseSpeed,
+  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
+  KeyCode.DASH: GameInput.decreaseSpeed,
+};
+
 // binds user key presses to specific game controls
 class UserInput extends GameInputController {
-  final Map<int, GameInput> _bindings;
+  final Map<int, GameInput> _pieceBindings;
 
-  UserInput(this._bindings) {
+  UserInput(this._pieceBindings) {
     document.body.onKeyDown.listen(_onKeyDown);
   }
 
@@ -61,8 +54,22 @@ class UserInput extends GameInputController {
   factory UserInput.playerTwo() => UserInput(player_two_bindings);
 
   void _onKeyDown(KeyboardEvent e) {
-    if (_bindings.containsKey(e.keyCode)) {
-      input(_bindings[e.keyCode]);
+    if (_pieceBindings.containsKey(e.keyCode)) {
+      input(_pieceBindings[e.keyCode]);
+    } else if (setup_bindings.containsKey(e.keyCode)) {
+      input(setup_bindings[e.keyCode]);
+    }
+  }
+}
+
+class AIInput extends DecisionTreeInput {
+  AIInput({int depth}) : super(depth: depth) {
+    document.body.onKeyDown.listen(_onKeyDown);
+  }
+
+  void _onKeyDown(KeyboardEvent e) {
+    if (setup_bindings.containsKey(e.keyCode)) {
+      input(setup_bindings[e.keyCode]);
     }
   }
 }

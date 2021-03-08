@@ -55,7 +55,7 @@ class GameState {
   }
 
   /// an array of 0, 1, with 1 in the position for the selected r value in rs
-  List<int> get rOut => List<int>.generate(piece_rotation_mod, (index) => r == index ? 1 : 0);
+  List<int> get rOut => List<int>.generate(rs.length, (index) => r == index ? 1 : 0);
 
   /// an array of 0, 1, with 1 in the position for the selected x value in xs
   List<int> get xOut => List<int>.generate(xs.length, (index) => x == index ? 1 : 0);
