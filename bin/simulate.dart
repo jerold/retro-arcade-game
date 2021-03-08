@@ -14,23 +14,30 @@ void main(List<String> arguments) {
     patterns[i].add(Pattern.fromRaw(raw));
   });
 
-  Map<int, PatternSet> sets = <int, PatternSet>{};
+  final sets = <int, PatternSet>{};
   for (var i = 0; i < pieces.length; i++) {
-    sets[i] = PatternSet(patterns[i]);
-    RBFNetwork(piece_avatars[i], sets[i]);
+    final ps =  PatternSet(patterns[i]);
+    print('${piece_avatars[i]} len:${ps.patterns.length} t:${ps.patternsByTargetType.length} c:${ps.centers.length}');
+    sets[i] = ps;
+  }
+
+  final nets = <int, RBFNetwork>{};
+  for (var i = 0; i < pieces.length; i++) {
+    nets[i] = RBFNetwork(piece_avatars[i], sets[i]);
+    nets[i].run(NetworkMode.train);
   }
 
   exit(0);
 
-  final start = DateTime.now();
-  final sink = File('pattern.txt').openWrite();
-  final controller = ImmediateDecisionTreeInput(10000, sink.writeln, depth: 3);
-  final game = Game(controller: controller)..start();
-  controller.finish.then((_) async {
-    print('Complete  ${DateTime.now().difference(start).inSeconds}s');
-    print('Games:${game.plays}, Score:${game.score}, HighScore:${game.highScore}');
+  // final start = DateTime.now();
+  // final sink = File('data/d2_10.2.txt').openWrite();
+  // final controller = ImmediateDecisionTreeInput(100000, sink.writeln, depth: 2);
+  // final game = Game(controller: controller)..start();
+  // controller.finish.then((_) async {
+  //   print('Complete  ${DateTime.now().difference(start).inSeconds}s');
+  //   print('Games:${game.plays}, Score:${game.score}, HighScore:${game.highScore}');
 
-    await sink.flush();
-    exit(0);
-  });
+  //   await sink.flush();
+  //   exit(0);
+  // });
 }
