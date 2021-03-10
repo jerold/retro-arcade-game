@@ -14,6 +14,9 @@ abstract class GameInputController {
 
   int _tickIntervalMs = default_auto_tick_ms;
 
+  List<List<int>> _board;
+  int _i;
+
   // GAME INTERFACE
 
   // called by game when setting is changed
@@ -29,6 +32,8 @@ abstract class GameInputController {
   }
 
   void changeBoard(List<List<int>> board, List<int> queue) {
+    _board = board;
+    _i = queue.first;
     handleBoardChanged(board, queue);
   }
 
@@ -92,7 +97,7 @@ mixin Immediate {
 // hooks an ai up to a board and translates the AI's output to game controls
 class DecisionTreeInput extends GameInputController with PlanningSomething {
   GameState _state;
-  DecisionTree _tree;
+  TopoTree _tree;
   int _depth;
 
   Timer _tickTimer;
@@ -121,7 +126,9 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   @override
   void handleBoardChanged(List<List<int>> board, List<int> queue) {
     _state = GameState(board, queue);
-    _tree = DecisionTree.head(board, queue, _depth);
+    final start = DateTime.now();
+    _tree = TopoTree.head(board, queue, _depth);
+    print('time:${DateTime.now().difference(start).inMilliseconds}ms branching:${TopoTree.branchCount}');
   }
 
   @override
