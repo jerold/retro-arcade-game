@@ -2,9 +2,10 @@ import 'dart:math';
 
 import 'util.dart';
 
-enum PatternType {
+enum NetworkMode {
   train,
   test,
+  validate,
 }
 
 enum LayerType {
@@ -52,11 +53,12 @@ List<num> vectorizeMatrix(List<List<num>> p) => p.expand((e) => e);
 class Neuron {
   Layer layer;
 
-  num sigma;
   num input = 0.0;
   num output = 0.0;
 
-  List<num> centers = <num>[];
+  num sigma = 0.0;
+  List<num> center = <num>[];
+
   List<num> weights = <num>[];
   List<num> weightDeltas = <num>[];
 
@@ -103,9 +105,8 @@ class Layer {
     final prevOutputs = prev.getOutputs();
     for (var i = 0; i < neurons.length; i++) {
       for (var j = 0; j < prevOutputs.length; j++) {
-        neurons[i]
-          ..weightDeltas[j] = network._eta * targets[i] - neurons[i].output * prevOutputs[j]
-          ..weights[j] = neurons[i].weights[j] + neurons[i].weightDeltas[j];
+        neurons[i].weightDeltas[j] = network._eta * (targets[i] - neurons[i].output) * prevOutputs[j];
+        neurons[i].weights[j] = neurons[i].weights[j] + neurons[i].weightDeltas[j];
         if (neurons[i].weights[j] > 9999999) {
           throw Exception('Divergent Weights!');
         }
@@ -126,7 +127,7 @@ class Layer {
         // RBF on the Euclidian Norm of input to center
         final prevOutputs = prev.getOutputs();
         neurons.forEach((n) {
-          n.input = euclidianDistance(prevOutputs, n.centers);
+          n.input = euclidianDistance(prevOutputs, n.center);
           n.output = radialBasisFunction(n.input, n.sigma);
         });
         next.feedForward();
@@ -146,9 +147,9 @@ class Layer {
 
 class Pattern {
   List<int> target;
-  List<num> input;
+  List<num> inputs;
 
-  Pattern._(this.target, this.input);
+  Pattern._(this.target, this.inputs);
 
   factory Pattern.fromRaw(List<int> raw) {
     // target contains an array representing the piece rotation and x offset
@@ -175,12 +176,16 @@ class PatternSet {
   final Map<String, List<Pattern>> patternsByTargetType = <String, List<Pattern>>{};
   final List<Pattern> patterns;
 
+  List<num> sigmas;
+  List<List<num>> centers;
+
   final int inputMagnitude;
-  final int targetMagnitude;
+  int get centerMagnitude => centers.length;
+  final int outputMagnitude;
 
   PatternSet(this.patterns)
-      : inputMagnitude = patterns.first.input.length,
-        targetMagnitude = patterns.first.target.length {
+      : inputMagnitude = patterns.first.inputs.length,
+        outputMagnitude = patterns.first.target.length {
     patterns.forEach((p) {
       final k = p.target.join();
       if (!patternsByTargetType.containsKey(k)) {
@@ -188,11 +193,35 @@ class PatternSet {
       }
       patternsByTargetType[k].add(p);
     });
+    _buildCentersAndSigmas();
+  }
+
+  // centers are build in two steps
+  // 1) aveerage is built for each target (from patterns of matching that target type)
+  // 2) run k-means on the new centers against all patterns
+  // sigmas are calculated for each element
+  void _buildCentersAndSigmas() {
+    centers = buildMeans(patternsByTargetType.values);
+    // k-means to soften centers, (less strictly associated to
+    // patterns of a single target type and more for all patterns)
+    var dist = 2.0;
+    var distDelta = 2.0;
+    while (dist > 1 && distDelta.abs() > 0.1) {
+      final newCenters = adjustCenters(patterns, centers);
+      var newDist = 0.0;
+      for (var i = 0; i < centers.length; i++) {
+        newDist = newDist + euclidianDistance(centers[i], newCenters[i]);
+      }
+      centers = newCenters;
+      distDelta = newDist - dist;
+      dist = newDist;
+    }
+    sigmas = buildSigmas(membership(patterns, centers), centers);
   }
 }
 
 class RBFNetwork {
-  String _identifier;
+  final String _identifier;
   // step size when performing gradient descent
   num _eta = 1.0;
   num _absErr = 100;
@@ -201,40 +230,47 @@ class RBFNetwork {
   Layer _hiddenLayer;
   Layer _outputLayer;
 
-  List<List<num>> _centers;
-  List<List<num>> _sigmas;
+  final PatternSet _patternSet;
 
-  RBFNetwork(this._identifier, PatternSet ps) {
-    _inputLayer = Layer(this, LayerType.input, null, ps.inputMagnitude);
-    _hiddenLayer = Layer(this, LayerType.hidden, _inputLayer, ps.targetMagnitude);
-    _outputLayer = Layer(this, LayerType.output, _hiddenLayer, ps.targetMagnitude);
-    buildCentersAndSigmas(ps);
+  RBFNetwork(this._identifier, this._patternSet) {
+    _inputLayer = Layer(this, LayerType.input, null, _patternSet.inputMagnitude);
+    _hiddenLayer = Layer(this, LayerType.hidden, _inputLayer, _patternSet.centerMagnitude);
+    _outputLayer = Layer(this, LayerType.output, _hiddenLayer, _patternSet.outputMagnitude);
+    applyCentersAndSigmas();
   }
 
-  // centers are build in two steps
-  // 1) aveerage is built for each target (from patterns of matching that target type)
-  // 2) run k-means on the new centers against all patterns
-  // sigmas are calculated for each element
-  void buildCentersAndSigmas(PatternSet ps) {
-    _centers = buildMeans(ps.patternsByTargetType.values);
-    // k-means to soften centers, (less strictly associated to
-    // patterns of a single target type and more for all patterns)
-    var dist = 2.0;
-    var distDelta = 2.0;
-    while (dist > 1 && distDelta.abs() > 0.1) {
-      final newCenters = adjustCenters(ps.patterns, _centers);
-      var newDist = 0.0;
-      for (var i = 0; i < _centers.length; i++) {
-        newDist = newDist + euclidianDistance(_centers[i], newCenters[i]);
+  void run(NetworkMode mode) {
+    _eta = 1.0;
+    _absErr = 100;
+    var errorSum = 0.0;
+    final start = DateTime.now();
+    for (final pattern in _patternSet.patterns) {
+      _inputLayer
+        ..setInputs(pattern.inputs)
+        ..feedForward();
+      if (mode == NetworkMode.train) {
+        print('Target: ${pattern.target}');
+        print('  First: ${_outputLayer.getOutputs()}');
+        _outputLayer.adjustWeights(pattern.target);
+        _inputLayer
+          ..setInputs(pattern.inputs)
+          ..feedForward();
+        print('  Second: ${_outputLayer.getOutputs()}');
+      } else if (mode == NetworkMode.test) {
+        // add confusion matrix
       }
-      _centers = newCenters;
-      distDelta = newDist - dist;
-      dist = newDist;
+      final outError = outputError(_outputLayer.getOutputs(), pattern.target);
+      errorSum += outError;
+      _eta = _eta - _eta/((_patternSet.patterns.length)*1.1);
     }
-    _sigmas = buildSigmas(membership(ps.patterns, _centers), _centers);
+    print('$_identifier Ran Complete err:${errorSum} time:${DateTime.now().difference(start).inMilliseconds}ms');
+  }
 
-    print(
-        '$_identifier TargetTypes:${ps.patternsByTargetType.keys.length} centers:${_centers.length} sigmas:${_sigmas.length}');
+  void applyCentersAndSigmas() {
+    for (var i = 0; i < _hiddenLayer.neurons.length; i++) {
+      _hiddenLayer.neurons[i].center = _patternSet.centers[i];
+      _hiddenLayer.neurons[i].sigma = _patternSet.sigmas[i];
+    }
   }
 }
 
@@ -242,10 +278,10 @@ List<List<num>> buildMeans(Iterable<List<Pattern>> patterns) => patterns.map(bui
 
 // given several patterns for the same targetType generate an average input
 List<num> buildInputMean(List<Pattern> patterns) {
-  var mean = List<num>.filled(patterns.first.input.length, 0.0);
+  var mean = List<num>.filled(patterns.first.inputs.length, 0.0);
   patterns.forEach((p) {
     for (var i = 0; i < mean.length; i++) {
-      mean[i] = mean[i] + p.input[i];
+      mean[i] = mean[i] + p.inputs[i];
     }
   });
   for (var i = 0; i < mean.length; i++) {
@@ -254,11 +290,11 @@ List<num> buildInputMean(List<Pattern> patterns) {
   return mean;
 }
 
-List<List<num>> buildSigmas(List<List<Pattern>> members, List<List<num>> centers) {
+List<num> buildSigmas(List<List<Pattern>> members, List<List<num>> centers) {
   if (members.length != centers.length) {
     throw Exception('Unable to make Sigma when members and centers have different lengths!');
   }
-  final s = List<List<num>>.generate(centers.length, (_) => <num>[]);
+  final s = List<num>.generate(centers.length, (_) => 0.0, growable: false);
   for (var i = 0; i < centers.length; i++) {
     s[i] = buildInputSigma(members[i], centers[i]);
   }
@@ -266,14 +302,14 @@ List<List<num>> buildSigmas(List<List<Pattern>> members, List<List<num>> centers
 }
 
 // sigmas represent how spread out from the mean a pattern set's outputs are
-List<num> buildInputSigma(List<Pattern> patterns, List<num> center) {
-  var sigma = List<num>.filled(center.length, 0.0, growable: false);
+num buildInputSigma(List<Pattern> patterns, List<num> center) {
+  var sigma = 0.0;
   // sum over square of distances from means
-  for (var i = 0; i < sigma.length; i++) {
+  for (var i = 0; i < center.length; i++) {
     patterns.forEach((p) {
-      sigma[i] = sigma[i] + (p.input[i] - center[i]) * (p.input[i] - center[i]);
+      sigma = sigma + (p.inputs[i] - center[i]) * (p.inputs[i] - center[i]);
     });
-    sigma[i] = sqrt(1 / patterns.length * sigma[i]);
+    sigma = sqrt(1 / patterns.length * sigma);
   }
   return sigma;
 }
@@ -288,10 +324,10 @@ List<List<num>> adjustCenters(List<Pattern> patterns, List<List<num>> centers) {
 List<List<Pattern>> membership(List<Pattern> patterns, List<List<num>> centers) {
   final members = List<List<Pattern>>.generate(centers.length, (_) => <Pattern>[]);
   patterns.forEach((p) {
-    var dBest = euclidianDistance(p.input, centers[0]);
+    var dBest = euclidianDistance(p.inputs, centers[0]);
     var iBest = 0;
     for (var i = 1; i < centers.length; i++) {
-      final dist = euclidianDistance(p.input, centers[i]);
+      final dist = euclidianDistance(p.inputs, centers[i]);
       if (dist < dBest) {
         dBest = dist;
         iBest = i;
