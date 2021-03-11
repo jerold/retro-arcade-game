@@ -2,11 +2,6 @@ library arcade_utils;
 
 import 'dart:math';
 
-// used to generate new piece indexes in the queue
-final rand = Random();
-
-const piece_rotations = 4;
-
 // board dimensions
 const board_y = 24;
 const board_x = 10;
@@ -17,7 +12,7 @@ const shadow_value = -1;
 const predict_value = -2;
 
 // ai's search tree depth
-const int maxTreeDepth = 1;
+const int default_max_tree_depth = 2;
 
 // rate at which the game progresses
 const ms_inc = 50;
@@ -29,7 +24,7 @@ const min_tick_ms = 20;
 const default_game_tick_ms = 400;
 
 // initial default speed for the ai actions
-const default_auto_tick_ms = 150;
+const default_auto_tick_ms = 320;
 
 enum GameInput {
   reset,
@@ -43,34 +38,6 @@ enum GameInput {
   togglePause,
   increaseSpeed,
   decreaseSpeed,
-}
-
-String arrayAsInnerHtml(List<List<int>> board) => board.expand((row) => row.map(pixelAsInnerHtml)).join();
-
-String pixelAsInnerHtml(int pixel) => '<div class="pixel ${pixelClassName(pixel)}"></div>';
-
-String pieceSizeClassName(int size) {
-  switch (size) {
-    case 2:
-      return 'x2';
-    case 4:
-      return 'x4';
-    default:
-      return 'x3';
-  }
-}
-
-String pixelClassName(int pixel, {bool queuePixel = false}) {
-  switch (pixel) {
-    case 0:
-      return queuePixel ? 'q-empty' : 'empty';
-    case -1:
-      return 'shadow';
-    case -2:
-      return 'predict';
-    default:
-      return 'piece-${pixel}';
-  }
 }
 
 // maps the score fore completing the given number of lines
@@ -88,7 +55,10 @@ int scoreForLines(int lineCount) {
   return 0;
 }
 
-List<int> freshQueue() => List<int>.generate(4, (_) => rand.nextInt(pieces.length));
+// used to generate new piece indexes in the queue
+final _rand = Random();
+int randomPieceIndex([_]) => _rand.nextInt(pieces.length);
+List<int> freshQueue() => List<int>.generate(4, randomPieceIndex);
 
 // assuming the board is valid with the piece at a given x find
 // how far the piece can be dropped while still being valid
@@ -280,6 +250,51 @@ List<List<int>> boardCopy(List<List<int>> b, {int mask}) {
   return n;
 }
 
+// yield the difference a piece would make to the topology of a board if placed at the given x with the given rotation
+int topoDelta(int x, int r, int i, List<int> t) {
+  var d = 0;
+  final pt = pieceTopo(i, r);
+  final ptm = pieceTopoMask(i, r);
+
+  // piece must sit above the pixels on the board, shifting all piece y's up that amount
+  var sit = 0;
+  for (var i = 0; i < pt.length; i++) {
+    // iterate over the piece part of the topo map
+    final bx = x + i;
+    if (xOnBoard(bx) && ptm[i]) {
+      final thisSit = t[bx] - pt[i];
+      if (thisSit > sit) {
+        sit = thisSit;
+      }
+    }
+  }
+  for (var i = 0; i < pt.length; i++) {
+    final bx = x + i;
+    final di = xOnBoard(bx) && ptm[i] ? (pt[i] + sit - t[bx]).abs() : 0;
+    d += di;
+  }
+  return d;
+}
+
+List<int> boardTopology(List<List<int>> b) {
+  final e = <int>[];
+  var lowestPoint = 0;
+  for (var x = 0; x < board_x; x++) {
+    var y = 0;
+    while (y + 1 < board_y && pixelIsEmpty(x, y + 1, b)) {
+      y++;
+    }
+    if (y > lowestPoint) {
+      lowestPoint = y;
+    }
+    e.add(y);
+  }
+  for (var x = 0; x < board_x; x++) {
+    e[x] = lowestPoint - e[x];
+  }
+  return e;
+}
+
 // pretty print a 2d array to the console
 void printArray(List<List<int>> a, {String label}) {
   print('------------ ${label ?? ""}');
@@ -302,7 +317,7 @@ void printArray(List<List<int>> a, {String label}) {
 // returns a 2d array representing a piece rotated clockwise r times
 List<List<int>> rotatedPiece(int r, int i) {
   var piece = pieces[i];
-  for (var i = 0; i < r; i++) {
+  for (var j = 0; j < r; j++) {
     piece = rotateCW(piece);
   }
   return piece;
@@ -354,6 +369,89 @@ final piece_avatars = <String>[
   '⠼',
   '⠲⠂',
 ];
+
+// rotation values used while Branching to explore game space
+const rs = [0, 1, 2, 3];
+
+// x values used while Branching to explore game space
+const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+
+// list of rotations that do not share symmetry
+final piece_rs = <int>[
+  1,
+  2,
+  2,
+  2,
+  4,
+  4,
+  4,
+];
+
+List<int> pieceTopo(int i, int r) => piece_topos[i][r];
+
+// topo is a list of deltas in y from the bottom left corner of a piece
+// as x comparison will run from left to right on the board as deltas from the 1st non-empty piece x as well
+// piece topos are 2 px larger to account for optimal neighbor heights
+final piece_topos = genPieceTopos();
+
+// a topo for each rotation of each piece: topo[i][r] = List<int>
+List<List<List<int>>> genPieceTopos() {
+  final topos = <List<List<int>>>[];
+  for (var i = 0; i < pieces.length; i++) {
+    topos.add(<List<int>>[]);
+    for (var r = 0; r < piece_rs[i]; r++) {
+      final piece = rotatedPiece(r, i);
+      topos[i].add(genPieceTopo(piece));
+    }
+  }
+  return topos;
+}
+
+List<int> genPieceTopo(List<List<int>> piece) {
+  final topo = List<int>.filled(piece.length, 0);
+  final done = List<bool>.filled(piece.length, false);
+  int bottomY;
+  for (var y = piece.length - 1; y >= 0; y--) {
+    for (var x = 0; x < piece.length; x++) {
+      if (!pixelIsEmpty(x, y, piece) && !done[x]) {
+        bottomY ??= y;
+        topo[x] = bottomY - y;
+        done[x] = true;
+      }
+    }
+  }
+  return topo;
+}
+
+List<bool> pieceTopoMask(int i, int r) => piece_topo_masks[i][r];
+
+// topo masks are 2 px larger than the piece to compare neighboring piece hights
+final piece_topo_masks = genPieceTopoMasks();
+
+// a topo mask for each rotation of each piece: mask[i][r] = List<bool>
+List<List<List<bool>>> genPieceTopoMasks() {
+  final mask = <List<List<bool>>>[];
+  for (var i = 0; i < pieces.length; i++) {
+    mask.add(<List<bool>>[]);
+    for (var r = 0; r < piece_rs[i]; r++) {
+      final piece = rotatedPiece(r, i);
+      mask[i].add(getPieceTopoMask(piece));
+    }
+  }
+  return mask;
+}
+
+List<bool> getPieceTopoMask(List<List<int>> piece) {
+  final mask = List<bool>.filled(piece.length, false);
+  for (var y = 0; y < piece.length; y++) {
+    for (var x = 0; x < piece.length; x++) {
+      if (!pixelIsEmpty(x, y, piece)) {
+        mask[x] = true;
+      }
+    }
+  }
+  return mask;
+}
 
 // list of 2d arrays encoding each pieces' shape and color
 final pieces = <List<List<int>>>[
