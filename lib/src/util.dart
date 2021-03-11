@@ -12,7 +12,7 @@ const shadow_value = -1;
 const predict_value = -2;
 
 // ai's search tree depth
-const int default_max_tree_depth = 3;
+const int default_max_tree_depth = 2;
 
 // rate at which the game progresses
 const ms_inc = 50;
@@ -253,14 +253,14 @@ List<List<int>> boardCopy(List<List<int>> b, {int mask}) {
 // yield the difference a piece would make to the topology of a board if placed at the given x with the given rotation
 int topoDelta(int x, int r, int i, List<int> t) {
   var d = 0;
-  final pt = piece_topos[i][r];
-  final ptm = piece_topo_masks[i][r];
+  final pt = pieceTopo(i, r);
+  final ptm = pieceTopoMask(i, r);
 
   // piece must sit above the pixels on the board, shifting all piece y's up that amount
   var sit = 0;
-  for (var i = 1; i < pt.length - 1; i++) {
-    // iterate over the piece part of the topo map (i shifts piece 1 right because of padding, thus -1)
-    final bx = x + i - 1;
+  for (var i = 0; i < pt.length; i++) {
+    // iterate over the piece part of the topo map
+    final bx = x + i;
     if (xOnBoard(bx) && ptm[i]) {
       final thisSit = t[bx] - pt[i];
       if (thisSit > sit) {
@@ -268,9 +268,8 @@ int topoDelta(int x, int r, int i, List<int> t) {
       }
     }
   }
-
   for (var i = 0; i < pt.length; i++) {
-    final bx = x + i - 1;
+    final bx = x + i;
     final di = xOnBoard(bx) && ptm[i] ? (pt[i] + sit - t[bx]).abs() : 0;
     d += di;
   }
@@ -318,7 +317,7 @@ void printArray(List<List<int>> a, {String label}) {
 // returns a 2d array representing a piece rotated clockwise r times
 List<List<int>> rotatedPiece(int r, int i) {
   var piece = pieces[i];
-  for (var i = 0; i < r; i++) {
+  for (var j = 0; j < r; j++) {
     piece = rotateCW(piece);
   }
   return piece;
@@ -378,91 +377,81 @@ const rs = [0, 1, 2, 3];
 const xs = [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 // list of rotations that do not share symmetry
-final piece_rs = <List<int>>[
-  [0],
-  [0, 1],
-  [0, 1],
-  [0, 1],
-  [0, 1, 2, 3],
-  [0, 1, 2, 3],
-  [0, 1, 2, 3],
+final piece_rs = <int>[
+  1,
+  2,
+  2,
+  2,
+  4,
+  4,
+  4,
 ];
 
-// topo masks are 2 px larger than the piece to compare neighboring piece hights
-final piece_topo_masks = <List<List<bool>>>[
-  [
-    [true, true, true, true],
-  ],
-  [
-    [true, true, true, true, true, true],
-    [false, false, true, true, true, false],
-  ],
-  [
-    [true, true, true, true, true],
-    [true, true, true, true, false],
-  ],
-  [
-    [true, true, true, true, true],
-    [true, true, true, true, false],
-  ],
-  [
-    [false, true, true, true, true],
-    [true, true, true, true, true],
-    [true, true, true, true, false],
-    [true, true, true, true, true],
-  ],
-  [
-    [true, true, true, true, false],
-    [true, true, true, true, true],
-    [false, true, true, true, true],
-    [true, true, true, true, true],
-  ],
-  [
-    [true, true, true, true, true],
-    [true, true, true, true, false],
-    [true, true, true, true, true],
-    [false, true, true, true, true],
-  ],
-];
+List<int> pieceTopo(int i, int r) => piece_topos[i][r];
 
 // topo is a list of deltas in y from the bottom left corner of a piece
 // as x comparison will run from left to right on the board as deltas from the 1st non-empty piece x as well
 // piece topos are 2 px larger to account for optimal neighbor heights
-final piece_topos = <List<List<int>>>[
-  [
-    [2, 0, 0, 2],
-  ],
-  [
-    [1, 0, 0, 0, 0, 1],
-    [0, 0, 4, 0, 4, 0], // [x, x, 0, x]
-  ],
-  [
-    [1, 0, 0, 1, 2],
-    [3, 1, 0, 2, 0], // [1, 0, x]
-  ],
-  [
-    [2, 1, 0, 0, 1],
-    [2, 0, 1, 3, 0], // [0, 1, x]
-  ],
-  [
-    [0, 3, 0, 0, 1], // [x, 0, 0]
-    [2, 0, 1, 1, 2],
-    [3, 2, 0, 3, 0], // [0, 0, x]
-    [1, 0, 0, 0, 2],
-  ],
-  [
-    [1, 0, 0, 3, 0], // [0, 0, x]
-    [2, 0, 0, 0, 1],
-    [3, 0, 0, 2, 3], // [x, 0, 2]
-    [2, 1, 1, 0, 2],
-  ],
-  [
-    [2, 1, 0, 1, 2],
-    [2, 1, 0, 3, 0], // [0, -1, x]
-    [1, 0, 0, 0, 1],
-    [0, 3, 0, 1, 2], // [x, 0, 1]
-  ],
-];
+final piece_topos = genPieceTopos();
+
+// a topo for each rotation of each piece: topo[i][r] = List<int>
+List<List<List<int>>> genPieceTopos() {
+  final topos = <List<List<int>>>[];
+  for (var i = 0; i < pieces.length; i++) {
+    topos.add(<List<int>>[]);
+    for (var r = 0; r < piece_rs[i]; r++) {
+      final piece = rotatedPiece(r, i);
+      topos[i].add(genPieceTopo(piece));
+    }
+  }
+  return topos;
+}
+
+List<int> genPieceTopo(List<List<int>> piece) {
+  final topo = List<int>.filled(piece.length, 0);
+  final done = List<bool>.filled(piece.length, false);
+  int bottomY;
+  for (var y = piece.length - 1; y >= 0; y--) {
+    for (var x = 0; x < piece.length; x++) {
+      if (!pixelIsEmpty(x, y, piece) && !done[x]) {
+        bottomY ??= y;
+        topo[x] = bottomY - y;
+        done[x] = true;
+      }
+    }
+  }
+  return topo;
+}
+
+List<bool> pieceTopoMask(int i, int r) => piece_topo_masks[i][r];
+
+// topo masks are 2 px larger than the piece to compare neighboring piece hights
+final piece_topo_masks = genPieceTopoMasks();
+
+// a topo mask for each rotation of each piece: mask[i][r] = List<bool>
+List<List<List<bool>>> genPieceTopoMasks() {
+  final mask = <List<List<bool>>>[];
+  for (var i = 0; i < pieces.length; i++) {
+    mask.add(<List<bool>>[]);
+    for (var r = 0; r < piece_rs[i]; r++) {
+      final piece = rotatedPiece(r, i);
+      mask[i].add(getPieceTopoMask(piece));
+    }
+  }
+  return mask;
+}
+
+List<bool> getPieceTopoMask(List<List<int>> piece) {
+  final mask = List<bool>.filled(piece.length, false);
+  for (var y = 0; y < piece.length; y++) {
+    for (var x = 0; x < piece.length; x++) {
+      if (!pixelIsEmpty(x, y, piece)) {
+        mask[x] = true;
+      }
+    }
+  }
+  return mask;
+}
 
 // list of 2d arrays encoding each pieces' shape and color
 final pieces = <List<List<int>>>[

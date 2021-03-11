@@ -118,7 +118,7 @@ class WebRenderer implements GameRenderer {
     var queue = [...q];
 
     // show predictions when possibilities have been generated
-    if (controller is PlanningSomething) {
+    if (controller is PlanningSomething && (controller as PlanningSomething).isReady) {
       final ai = controller as PlanningSomething;
       final predictY = maxValidY(ai.x, y, ai.r, i, b);
       composite = merged(composite, boardCopy(pieceMask(ai.x, predictY, ai.r, i), mask: predict_value));

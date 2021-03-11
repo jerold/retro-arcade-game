@@ -45,13 +45,16 @@ class DecisionTree {
     _headspace = headspace(_result);
     _voids = voids(_result);
 
-    final depth = 0;
     if (q.isNotEmpty) {
-      for (final br in piece_rs[q[depth]]) {
+      final depth = 0;
+      final i = q[depth];
+      for (var br = 0; br < piece_rs[i]; br++) {
         for (final bx in xs) {
-          final branch = DecisionTree(bx, br, q, depth, maxDepth, _result);
-          if (branch.valid) {
-            _branches.add(branch);
+          if (_branches.length < 10 || topoDelta(bx, br, i, boardTopology(b)) == 0) {
+            final branch = DecisionTree(bx, br, q, depth, maxDepth, _result);
+            if (branch.valid) {
+              _branches.add(branch);
+            }
           }
         }
       }
@@ -71,6 +74,7 @@ class DecisionTree {
       final bestBranch = _branches[_bestBranchIndex];
       _or = bestBranch.r;
       _ox = bestBranch.x;
+      print('best:${topoDelta(_ox, _or, q[0], boardTopology(b))}');
     }
   }
 
@@ -89,7 +93,7 @@ class DecisionTree {
 
       if (q.length > depth + 1 && depth + 1 < maxDepth) {
         // OG brute force search, builds a lot of boards
-        for (final br in piece_rs[q[depth]]) {
+        for (var br = 0; br < piece_rs[i]; br++) {
           for (final bx in xs) {
             final branch = DecisionTree(bx, br, q, depth + 1, maxDepth, _result);
             if (branch.valid) {
@@ -147,8 +151,7 @@ class TopoTree {
     final scores = <int, List<int>>{};
     final i = q[0];
     final t = boardTopology(b);
-    for (var ri = 0; ri < piece_rs[i].length; ri++) {
-      final r = piece_rs[i][ri];
+    for (var r = 0; r < piece_rs[i]; r++) {
       for (var xi = 0; xi < xs.length; xi++) {
         final x = xs[xi];
         scores[topoDelta(x, r, i, t)] = [r, x];
@@ -200,8 +203,7 @@ class TopoTree {
 
         final i = q[depth + 1];
         final t = boardTopology(_result);
-        for (var ri = 0; ri < piece_rs[i].length; ri++) {
-          final r = piece_rs[i][ri];
+        for (var r = 0; r < piece_rs[i]; r++) {
           for (var xi = 0; xi < xs.length; xi++) {
             final x = xs[xi];
             scores[topoDelta(x, r, i, t)] = [r, x];

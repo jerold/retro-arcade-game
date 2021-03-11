@@ -73,6 +73,8 @@ class PlanningSomething {
   int x;
 
   int r;
+
+  bool isReady;
 }
 
 class PieceMove {
@@ -97,7 +99,7 @@ mixin Immediate {
 // hooks an ai up to a board and translates the AI's output to game controls
 class DecisionTreeInput extends GameInputController with PlanningSomething {
   GameState _state;
-  TopoTree _tree;
+  DecisionTree _tree;
   int _depth;
 
   Timer _tickTimer;
@@ -114,6 +116,9 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   int get r => _tree.r;
 
   @override
+  bool get isReady => _tree.valid;
+
+  @override
   void handlePausedChanged(bool isPaused) {
     _paused = isPaused;
     if (isPaused) {
@@ -126,9 +131,9 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   @override
   void handleBoardChanged(List<List<int>> board, List<int> queue) {
     _state = GameState(board, queue);
-    final start = DateTime.now();
-    _tree = TopoTree.head(board, queue, _depth);
-    print('time:${DateTime.now().difference(start).inMilliseconds}ms branching:${TopoTree.branchCount}');
+    // final start = DateTime.now();
+    _tree = DecisionTree.head(board, queue, _depth);
+    // print('time:${DateTime.now().difference(start).inMilliseconds}ms branching:${DecisionTree.branchCount}');
   }
 
   @override
@@ -170,7 +175,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
 
 class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
   final int _cycles;
-  int _i = 0;
+  int _j = 0;
 
   final Completer _completer = Completer();
   Future get finish => _completer.future;
@@ -184,12 +189,11 @@ class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
   @override
   void handleBoardChanged(List<List<int>> board, List<int> queue) {
     if (!_completer.isCompleted) {
-      if (_i < _cycles) {
-        _i++;
+      if (_j < _cycles) {
+        _j++;
         super.handleBoardChanged(board, queue);
         if (_tree.valid) {
-          if (_i % 100 == 0) print('$_i branching:${DecisionTree.branchCount}');
-
+          if (_j % 100 == 0) print('$_j branching:${DecisionTree.branchCount}');
           move(_tree.x, _tree.r);
           _log(GameState(board, queue)..updatePiece(_tree.x, 0, _tree.r));
         }
