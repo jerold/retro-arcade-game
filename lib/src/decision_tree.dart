@@ -74,7 +74,7 @@ class DecisionTree {
       final bestBranch = _branches[_bestBranchIndex];
       _or = bestBranch.r;
       _ox = bestBranch.x;
-      print('best:${topoDelta(_ox, _or, q[0], boardTopology(b))}');
+      // print('best:${topoDelta(_ox, _or, q[0], boardTopology(b))}');
     }
   }
 

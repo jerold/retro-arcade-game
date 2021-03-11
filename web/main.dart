@@ -7,9 +7,9 @@ import 'dart:html';
 import 'package:retro_arcade_game/arcade_game.dart';
 
 void main() {
-  // Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
+  Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
   // Game(controller: DecisionTreeInput(depth: 2), renderer: WebRenderer('#game-1')).start();
-  // Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
+  Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
   Game(controller: AIInput(), renderer: WebRenderer('#game-3')).start();
 }
 
