@@ -6,11 +6,42 @@ import 'dart:html';
 
 import 'package:retro_arcade_game/arcade_game.dart';
 
+const String p1 = 'p1';
+const String pvp = 'pvp';
+const String pvc = 'pvc';
+
 void main() {
+  setMode();
+
   Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
   // Game(controller: DecisionTreeInput(depth: 2), renderer: WebRenderer('#game-1')).start();
   Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
   Game(controller: AIInput(), renderer: WebRenderer('#game-3')).start();
+}
+
+void setMode() {
+  final mode = document.baseUri.split('/#/');
+  switch (mode.last) {
+    case p1:
+      querySelector('#game-1').style.display = 'none';
+      querySelector('#game-2').style.display = 'flex';
+      querySelector('#game-3').style.display = 'none';
+      break;
+    case pvp:
+      querySelector('#game-1').style.display = 'flex';
+      querySelector('#game-2').style.display = 'flex';
+      querySelector('#game-3').style.display = 'none';
+      break;
+    case pvc:
+      querySelector('#game-1').style.display = 'none';
+      querySelector('#game-2').style.display = 'flex';
+      querySelector('#game-3').style.display = 'flex';
+      break;
+    default:
+      window.location.assign('${mode.first}#/$p1');
+      setMode();
+      break;
+  }
 }
 
 // className used to trigger the bounce animation for scores
