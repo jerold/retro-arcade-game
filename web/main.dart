@@ -76,8 +76,17 @@ const Map<int, GameInput> setup_bindings = {
 class UserInput extends GameInputController {
   final Map<int, GameInput> _pieceBindings;
 
+  Point _startTouch;
+  Point _endTouch;
+
   UserInput(this._pieceBindings) {
     document.body.onKeyDown.listen(_onKeyDown);
+
+    if (_pieceBindings == player_one_bindings) {
+      document.body.onTouchStart.listen(_onTouchStart);
+      document.body.onTouchMove.listen(_onTouchMove);
+      document.body.onTouchEnd.listen(_onTouchEnd);
+    }
   }
 
   factory UserInput.playerOne() => UserInput(player_one_bindings);
@@ -89,6 +98,49 @@ class UserInput extends GameInputController {
       input(_pieceBindings[e.keyCode]);
     } else if (setup_bindings.containsKey(e.keyCode)) {
       input(setup_bindings[e.keyCode]);
+    }
+  }
+
+  void _onTouchStart(TouchEvent e) {
+    _startTouch = e.touches.first.client;
+    _endTouch = e.touches.first.client;
+  }
+
+  void _onTouchMove(TouchEvent e) {
+    _endTouch = e.touches.first.client;
+    final dist = _startTouch.distanceTo(_endTouch);
+    if (dist > 40) {
+      final deltaY = _endTouch.y - _startTouch.y;
+      final deltaX = _endTouch.x - _startTouch.x;
+      var moved = false;
+      if (deltaY.abs() > deltaX.abs()) {
+        if (deltaY < 0) {
+          input(GameInput.rotatePiece);
+          moved = true;
+        }
+      } else {
+        if (deltaX > 0) {
+          input(GameInput.movePieceRight);
+        } else {
+          input(GameInput.movePieceLeft);
+        }
+        moved = true;
+      }
+      if (moved) {
+        _startTouch = _endTouch;
+      }
+    }
+  }
+
+  void _onTouchEnd(TouchEvent e) {
+    if (_startTouch.distanceTo(_endTouch) > 40) {
+      final deltaY = _endTouch.y - _startTouch.y;
+      final deltaX = _endTouch.x - _startTouch.x;
+      if (deltaY.abs() > deltaX.abs()) {
+        if (deltaY > 0) {
+          input(GameInput.dropPiece);
+        }
+      }
     }
   }
 }
