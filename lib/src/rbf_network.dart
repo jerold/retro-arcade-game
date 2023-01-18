@@ -164,7 +164,7 @@ class Pattern {
       input.add(element / board_y);
     });
     if (input.length != board_x) {
-      throw Exception('Patter input is not the correct dimensions ${input.length} != ${board_x}');
+      throw Exception('Patter input is not the correct dimensions ${input.length} != $board_x');
     }
 
     return Pattern._(target, input);
@@ -224,7 +224,6 @@ class RBFNetwork {
   final String _identifier;
   // step size when performing gradient descent
   num _eta = 1.0;
-  num _absErr = 100;
 
   Layer _inputLayer;
   Layer _hiddenLayer;
@@ -241,7 +240,6 @@ class RBFNetwork {
 
   void run(NetworkMode mode) {
     _eta = 1.0;
-    _absErr = 100;
     var errorSum = 0.0;
     final start = DateTime.now();
     for (final pattern in _patternSet.patterns) {
@@ -261,9 +259,9 @@ class RBFNetwork {
       }
       final outError = outputError(_outputLayer.getOutputs(), pattern.target);
       errorSum += outError;
-      _eta = _eta - _eta/((_patternSet.patterns.length)*1.1);
+      _eta = _eta - _eta / ((_patternSet.patterns.length) * 1.1);
     }
-    print('$_identifier Ran Complete err:${errorSum} time:${DateTime.now().difference(start).inMilliseconds}ms');
+    print('$_identifier Ran Complete err:$errorSum time:${DateTime.now().difference(start).inMilliseconds}ms');
   }
 
   void applyCentersAndSigmas() {

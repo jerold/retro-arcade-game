@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:retro_arcade_game/arcade_game.dart';
 
-import 'data/d2_10k.dart';
+import 'data/d3_500.dart';
 
 void main(List<String> arguments) {
   final patterns = <int, List<Pattern>>{};
-  raw_patterns.forEach((raw) {
+  rp_d2_500.forEach((raw) {
     final i = raw[0];
     if (!patterns.containsKey(i)) {
       patterns[i] = <Pattern>[];
@@ -16,7 +16,7 @@ void main(List<String> arguments) {
 
   final sets = <int, PatternSet>{};
   for (var i = 0; i < pieces.length; i++) {
-    final ps =  PatternSet(patterns[i]);
+    final ps = PatternSet(patterns[i]);
     print('${piece_avatars[i]} len:${ps.patterns.length} t:${ps.patternsByTargetType.length} c:${ps.centers.length}');
     sets[i] = ps;
   }

@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:retro_arcade_game/arcade_game.dart';
-import 'package:retro_arcade_game/src/game_input_controller.dart';
+// import 'package:retro_arcade_game/src/game_input_controller.dart';
 import 'package:retro_arcade_game/src/game_renderer.dart';
-import 'package:retro_arcade_game/src/util.dart';
+// import 'package:retro_arcade_game/src/util.dart';
 
 class Game {
   // flag for pausing the game

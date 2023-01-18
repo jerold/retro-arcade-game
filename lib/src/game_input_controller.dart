@@ -5,7 +5,7 @@ import 'package:retro_arcade_game/src/decision_tree.dart';
 import 'package:retro_arcade_game/src/util.dart';
 import 'package:retro_arcade_game/src/game_state.dart';
 
-abstract class GameInputController {
+class GameInputController {
   final StreamController<GameInput> _inputStreamController = StreamController<GameInput>.broadcast();
 
   Stream<GameInput> get inputStream => _inputStreamController.stream;
@@ -13,9 +13,6 @@ abstract class GameInputController {
   bool _isPaused = false;
 
   int _tickIntervalMs = default_auto_tick_ms;
-
-  List<List<int>> _board;
-  int _i;
 
   // GAME INTERFACE
 
@@ -32,8 +29,6 @@ abstract class GameInputController {
   }
 
   void changeBoard(List<List<int>> board, List<int> queue) {
-    _board = board;
-    _i = queue.first;
     handleBoardChanged(board, queue);
   }
 

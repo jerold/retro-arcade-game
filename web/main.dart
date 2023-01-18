@@ -7,6 +7,7 @@ import 'dart:html';
 import 'package:retro_arcade_game/arcade_game.dart';
 
 const String p1 = 'p1';
+const String c1 = 'c1';
 const String pvp = 'pvp';
 const String pvc = 'pvc';
 
@@ -26,6 +27,11 @@ void setMode() {
       querySelector('#game-1').style.display = 'none';
       querySelector('#game-2').style.display = 'flex';
       querySelector('#game-3').style.display = 'none';
+      break;
+    case c1:
+      querySelector('#game-1').style.display = 'none';
+      querySelector('#game-2').style.display = 'none';
+      querySelector('#game-3').style.display = 'flex';
       break;
     case pvp:
       querySelector('#game-1').style.display = 'flex';
@@ -304,6 +310,6 @@ String pixelClassName(int pixel, {bool queuePixel = false}) {
     case -2:
       return 'predict';
     default:
-      return 'piece-${pixel}';
+      return 'piece-$pixel';
   }
 }
