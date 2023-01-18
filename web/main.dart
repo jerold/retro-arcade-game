@@ -10,44 +10,60 @@ const String p1 = 'p1';
 const String c1 = 'c1';
 const String pvp = 'pvp';
 const String pvc = 'pvc';
+const String cvc = 'cvc';
 
+final _games = <Game>[];
 void main() {
   setMode();
-
-  Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')).start();
-  // Game(controller: DecisionTreeInput(depth: 2), renderer: WebRenderer('#game-1')).start();
-  Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')).start();
-  Game(controller: AIInput(), renderer: WebRenderer('#game-3')).start();
 }
 
 void setMode() {
   final mode = document.baseUri.split('/#/');
   switch (mode.last) {
     case p1:
-      querySelector('#game-1').style.display = 'none';
-      querySelector('#game-2').style.display = 'flex';
-      querySelector('#game-3').style.display = 'none';
+      _games.addAll([
+        Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-1')),
+      ]);
+      querySelector('#game-1').style.display = 'flex';
+      querySelector('#game-2').style.display = 'none';
       break;
     case c1:
-      querySelector('#game-1').style.display = 'none';
+      _games.addAll([
+        Game(renderer: WebRenderer('#game-1')),
+      ]);
+      querySelector('#game-1').style.display = 'flex';
       querySelector('#game-2').style.display = 'none';
-      querySelector('#game-3').style.display = 'flex';
       break;
     case pvp:
+      _games.addAll([
+        Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-2')),
+        Game(controller: UserInput.playerTwo(), renderer: WebRenderer('#game-1')),
+      ]);
       querySelector('#game-1').style.display = 'flex';
       querySelector('#game-2').style.display = 'flex';
-      querySelector('#game-3').style.display = 'none';
       break;
     case pvc:
-      querySelector('#game-1').style.display = 'none';
+      _games.addAll([
+        Game(controller: UserInput.playerOne(), renderer: WebRenderer('#game-1')),
+        Game(renderer: WebRenderer('#game-2'))
+      ]);
+      querySelector('#game-1').style.display = 'flex';
       querySelector('#game-2').style.display = 'flex';
-      querySelector('#game-3').style.display = 'flex';
+      break;
+    case cvc:
+      _games.addAll([
+        Game(renderer: WebRenderer('#game-1')),
+        Game(controller: AIInput(depth: 1), renderer: WebRenderer('#game-2')),
+      ]);
+      querySelector('#game-1').style.display = 'flex';
+      querySelector('#game-2').style.display = 'flex';
       break;
     default:
       window.location.assign('${mode.first}#/$p1');
       setMode();
       break;
   }
+  _games.forEach((game) => game.start());
 }
 
 // className used to trigger the bounce animation for scores
@@ -69,15 +85,6 @@ const Map<int, GameInput> player_two_bindings = {
   KeyCode.S: GameInput.movePieceDown,
 };
 
-const Map<int, GameInput> setup_bindings = {
-  KeyCode.ESC: GameInput.reset,
-  KeyCode.P: GameInput.togglePause,
-  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
-  KeyCode.EQUALS: GameInput.increaseSpeed,
-  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
-  KeyCode.DASH: GameInput.decreaseSpeed,
-};
-
 // binds user key presses to specific game controls
 class UserInput extends GameInputController {
   final Map<int, GameInput> _pieceBindings;
@@ -86,8 +93,6 @@ class UserInput extends GameInputController {
   Point _endTouch;
 
   UserInput(this._pieceBindings) {
-    document.body.onKeyDown.listen(_onKeyDown);
-
     if (_pieceBindings == player_one_bindings) {
       document.body.onTouchStart.listen(_onTouchStart);
       document.body.onTouchMove.listen(_onTouchMove);
@@ -99,11 +104,12 @@ class UserInput extends GameInputController {
 
   factory UserInput.playerTwo() => UserInput(player_two_bindings);
 
-  void _onKeyDown(KeyboardEvent e) {
+  @override
+  void onKeyDown(KeyboardEvent e) {
     if (_pieceBindings.containsKey(e.keyCode)) {
       input(_pieceBindings[e.keyCode]);
-    } else if (setup_bindings.containsKey(e.keyCode)) {
-      input(setup_bindings[e.keyCode]);
+    } else {
+      super.onKeyDown(e);
     }
   }
 
@@ -147,18 +153,6 @@ class UserInput extends GameInputController {
           input(GameInput.dropPiece);
         }
       }
-    }
-  }
-}
-
-class AIInput extends DecisionTreeInput {
-  AIInput({int depth}) : super(depth: depth) {
-    document.body.onKeyDown.listen(_onKeyDown);
-  }
-
-  void _onKeyDown(KeyboardEvent e) {
-    if (setup_bindings.containsKey(e.keyCode)) {
-      input(setup_bindings[e.keyCode]);
     }
   }
 }

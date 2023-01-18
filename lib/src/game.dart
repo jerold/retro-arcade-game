@@ -43,7 +43,7 @@ class Game {
   GameInputController _controller;
 
   Game({GameInputController controller, GameRenderer renderer}) {
-    _controller = controller ?? DecisionTreeInput();
+    _controller = controller ?? AIInput();
     _controller.inputStream.listen(_handleInput);
     if (_controller is Immediate) {
       // ticking on a timed interval won't be required

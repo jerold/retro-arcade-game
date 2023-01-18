@@ -26,6 +26,8 @@ class DecisionTree {
 
   // actions and results branching forward from this one
   final _branches = <DecisionTree>[];
+
+  // folds all child scores together (accounts for moves that leave the most options open)
   int get _branchesScore => _branches.fold(0, (childScores, b) => childScores + b.score);
 
   // scored points from this action used in total recursive scroling below

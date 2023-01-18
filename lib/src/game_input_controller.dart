@@ -1,11 +1,32 @@
 import 'dart:async';
+import 'dart:html';
 import 'dart:math';
 
 import 'package:retro_arcade_game/src/decision_tree.dart';
 import 'package:retro_arcade_game/src/util.dart';
 import 'package:retro_arcade_game/src/game_state.dart';
 
+const Map<int, GameInput> setup_bindings = {
+  KeyCode.ESC: GameInput.reset,
+  KeyCode.P: GameInput.togglePause,
+  KeyCode.NUM_PLUS: GameInput.increaseSpeed,
+  KeyCode.EQUALS: GameInput.increaseSpeed,
+  KeyCode.NUM_MINUS: GameInput.decreaseSpeed,
+  KeyCode.DASH: GameInput.decreaseSpeed,
+};
+
 class GameInputController {
+  GameInputController() {
+    document.body.onKeyDown.listen(onKeyDown);
+  }
+
+  void onKeyDown(KeyboardEvent e) {
+    print('$runtimeType ${setup_bindings.containsKey(e.keyCode)}');
+    if (setup_bindings.containsKey(e.keyCode)) {
+      input(setup_bindings[e.keyCode]);
+    }
+  }
+
   final StreamController<GameInput> _inputStreamController = StreamController<GameInput>.broadcast();
 
   Stream<GameInput> get inputStream => _inputStreamController.stream;
@@ -92,7 +113,7 @@ mixin Immediate {
 }
 
 // hooks an ai up to a board and translates the AI's output to game controls
-class DecisionTreeInput extends GameInputController with PlanningSomething {
+class AIInput extends GameInputController with PlanningSomething {
   GameState _state;
   DecisionTree _tree;
   int _depth;
@@ -100,7 +121,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   Timer _tickTimer;
   bool _paused = false;
 
-  DecisionTreeInput({int depth}) {
+  AIInput({int depth}) {
     _depth = depth ?? default_max_tree_depth;
   }
 
@@ -168,7 +189,7 @@ class DecisionTreeInput extends GameInputController with PlanningSomething {
   }
 }
 
-class ImmediateDecisionTreeInput extends DecisionTreeInput with Immediate {
+class ImmediateDecisionTreeInput extends AIInput with Immediate {
   final int _cycles;
   int _j = 0;
 
