@@ -139,7 +139,7 @@ class Game {
 
   // add a piece index to the end of the queue
   void _enqueue() {
-    _q.add(randomPieceIndex());
+    _q.add(pieceIndexFromBag());
   }
 
   // remove a piece index from the front of the queue

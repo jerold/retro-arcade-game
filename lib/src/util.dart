@@ -58,7 +58,17 @@ int scoreForLines(int lineCount) {
 // used to generate new piece indexes in the queue
 final _rand = Random();
 int randomPieceIndex([_]) => _rand.nextInt(pieces.length);
-List<int> freshQueue() => List<int>.generate(4, randomPieceIndex);
+
+var _bag = [];
+int pieceIndexFromBag([_]) {
+  if (_bag.isEmpty) _bag = List<int>.generate(pieces.length, (i) => i);
+  final bagIndex = _rand.nextInt(_bag.length);
+  final index = _bag[bagIndex];
+  _bag.removeAt(bagIndex);
+  return index;
+}
+
+List<int> freshQueue() => List<int>.generate(4, pieceIndexFromBag);
 
 // assuming the board is valid with the piece at a given x find
 // how far the piece can be dropped while still being valid
