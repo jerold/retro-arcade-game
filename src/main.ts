@@ -7,6 +7,7 @@ const P1 = 'p1';
 const C1 = 'c1';
 const PVP = 'pvp';
 const PVC = 'pvc';
+const C2 = 'c2';
 const CVC = 'cvc';
 
 const games: Game[] = [];
@@ -47,6 +48,13 @@ function setMode(): void {
       );
       game1.style.display = 'flex';
       game2.style.display = 'flex';
+      break;
+    case C2:
+      games.push(
+        new Game({ controller: new CEMInput(), renderer: new WebRenderer('#game-1') }),
+      );
+      game1.style.display = 'flex';
+      game2.style.display = 'none';
       break;
     case CVC:
       games.push(
