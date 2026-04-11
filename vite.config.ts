@@ -3,6 +3,7 @@ import { defineConfig, Plugin } from 'vite'
 function fileProtocolCompatibility(): Plugin {
   return {
     name: 'file-protocol-compatibility',
+    apply: 'build',
     transformIndexHtml(html) {
       return html
         .replace(/ crossorigin/g, '')
