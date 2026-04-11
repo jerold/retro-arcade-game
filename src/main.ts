@@ -1,5 +1,5 @@
 import { Game } from './game';
-import { AIInput } from './game-input-controller';
+import { AIInput, CEMInput } from './game-input-controller';
 import { UserInput } from './user-input';
 import { WebRenderer } from './web-renderer';
 
@@ -51,7 +51,7 @@ function setMode(): void {
     case CVC:
       games.push(
         new Game({ renderer: new WebRenderer('#game-1') }),
-        new Game({ controller: new AIInput(1), renderer: new WebRenderer('#game-2') }),
+        new Game({ controller: new CEMInput(), renderer: new WebRenderer('#game-2') }),
       );
       game1.style.display = 'flex';
       game2.style.display = 'flex';
