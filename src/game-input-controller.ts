@@ -3,6 +3,8 @@ import { GameState } from './game-state';
 import {
   DEFAULT_AUTO_TICK_MS, DEFAULT_MAX_TREE_DEPTH, GameInput, MIN_TICK_MS, RS,
 } from './util';
+import { evaluateBestPlacement } from './cem-evaluator';
+import cemWeights from './cem-weights.json';
 
 export type InputHandler = (input: GameInput) => void;
 
@@ -151,6 +153,82 @@ export class AIInput extends GameInputController implements PlanningSomething {
       } else if (this._state.x > this._tree.x) {
         this.input(GameInput.movePieceLeft);
       } else if (this._state.x < this._tree.x) {
+        this.input(GameInput.movePieceRight);
+      } else {
+        this.input(GameInput.dropPiece);
+      }
+    }
+    this._scheduleTick();
+  }
+}
+
+export class CEMInput extends GameInputController implements PlanningSomething {
+  private _targetX = 0;
+  private _targetR = 0;
+  private _currentX = 0;
+  private _currentR = 0;
+  private _ready = false;
+  private _tickTimer: number | null = null;
+  private _paused = false;
+
+  get x(): number { return this._targetX; }
+  get r(): number { return this._targetR; }
+  get isReady(): boolean { return this._ready; }
+
+  protected handlePausedChanged(isPaused: boolean): void {
+    this._paused = isPaused;
+    if (isPaused) {
+      this._cancelTick();
+    } else {
+      this._scheduleTick();
+    }
+  }
+
+  protected handleBoardChanged(board: number[][], queue: number[]): void {
+    const pieceIndex = queue[0];
+    const placement = evaluateBestPlacement(board, pieceIndex, cemWeights as number[]);
+    if (placement) {
+      this._targetX = placement.x;
+      this._targetR = placement.rotation;
+      this._ready = true;
+    } else {
+      this._ready = false;
+    }
+  }
+
+  protected handlePieceChanged(x: number, _y: number, r: number): void {
+    this._currentX = x;
+    this._currentR = r % RS.length;
+  }
+
+  protected handleGameStarted(): void {
+    this._scheduleTick();
+  }
+
+  private _scheduleTick(): void {
+    if (!this._paused) {
+      this._cancelTick();
+      this._tickTimer = window.setTimeout(
+        () => this._tick(),
+        Math.max(MIN_TICK_MS, this._tickIntervalMs),
+      );
+    }
+  }
+
+  private _cancelTick(): void {
+    if (this._tickTimer !== null) {
+      clearTimeout(this._tickTimer);
+      this._tickTimer = null;
+    }
+  }
+
+  private _tick(): void {
+    if (!this._isPaused && this._ready) {
+      if (this._currentR !== this._targetR) {
+        this.input(GameInput.rotatePiece);
+      } else if (this._currentX > this._targetX) {
+        this.input(GameInput.movePieceLeft);
+      } else if (this._currentX < this._targetX) {
         this.input(GameInput.movePieceRight);
       } else {
         this.input(GameInput.dropPiece);
