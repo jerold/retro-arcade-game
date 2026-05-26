@@ -23,26 +23,26 @@ const PLAYER_TWO_BINDINGS: Record<string, GameInput> = {
 
 export class UserInput extends GameInputController {
   private _pieceBindings: Record<string, GameInput>;
-  private _startTouch: { x: number; y: number } | null = null;
-  private _endTouch: { x: number; y: number } | null = null;
+  private _touches = new Map<number, { x: number; y: number }>();
+  private _inverted: boolean;
 
-  constructor(pieceBindings: Record<string, GameInput>) {
+  constructor(pieceBindings: Record<string, GameInput>, touchTarget?: HTMLElement, inverted = false) {
     super();
     this._pieceBindings = pieceBindings;
+    this._inverted = inverted;
 
-    if (pieceBindings === PLAYER_ONE_BINDINGS) {
-      document.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: true });
-      document.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: true });
-      document.addEventListener('touchend', (e) => this._onTouchEnd(e), { passive: true });
-    }
+    const el = touchTarget ?? document;
+    el.addEventListener('touchstart', (e) => this._onTouchStart(e as TouchEvent), { passive: true });
+    el.addEventListener('touchmove', (e) => this._onTouchMove(e as TouchEvent), { passive: true });
+    el.addEventListener('touchend', (e) => this._onTouchEnd(e as TouchEvent), { passive: true });
   }
 
-  static playerOne(): UserInput {
-    return new UserInput(PLAYER_ONE_BINDINGS);
+  static playerOne(touchTarget?: HTMLElement, inverted = false): UserInput {
+    return new UserInput(PLAYER_ONE_BINDINGS, touchTarget, inverted);
   }
 
-  static playerTwo(): UserInput {
-    return new UserInput(PLAYER_TWO_BINDINGS);
+  static playerTwo(touchTarget?: HTMLElement, inverted = false): UserInput {
+    return new UserInput(PLAYER_TWO_BINDINGS, touchTarget, inverted);
   }
 
   onKeyDown(e: KeyboardEvent): void {
@@ -54,55 +54,65 @@ export class UserInput extends GameInputController {
   }
 
   private _onTouchStart(e: TouchEvent): void {
-    const touch = e.touches[0];
-    this._startTouch = { x: touch.clientX, y: touch.clientY };
-    this._endTouch = { x: touch.clientX, y: touch.clientY };
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      this._touches.set(t.identifier, { x: t.clientX, y: t.clientY });
+    }
   }
 
   private _onTouchMove(e: TouchEvent): void {
-    const touch = e.touches[0];
-    this._endTouch = { x: touch.clientX, y: touch.clientY };
+    const flip = this._inverted ? -1 : 1;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      const start = this._touches.get(t.identifier);
+      if (!start) continue;
 
-    if (!this._startTouch || !this._endTouch) return;
+      const dx = (t.clientX - start.x) * flip;
+      const dy = (t.clientY - start.y) * flip;
+      const dist = Math.hypot(dx, dy);
 
-    const dx = this._endTouch.x - this._startTouch.x;
-    const dy = this._endTouch.y - this._startTouch.y;
-    const dist = Math.hypot(dx, dy);
-
-    if (dist > 40) {
-      let moved = false;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        if (dy < 0) {
-          this.input(GameInput.rotatePiece);
+      if (dist > 40) {
+        let moved = false;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          if (dy < 0) {
+            this.input(GameInput.rotatePiece);
+            moved = true;
+          }
+        } else {
+          if (dx > 0) {
+            this.input(GameInput.movePieceRight);
+          } else {
+            this.input(GameInput.movePieceLeft);
+          }
           moved = true;
         }
-      } else {
-        if (dx > 0) {
-          this.input(GameInput.movePieceRight);
-        } else {
-          this.input(GameInput.movePieceLeft);
+        if (moved) {
+          this._touches.set(t.identifier, { x: t.clientX, y: t.clientY });
         }
-        moved = true;
-      }
-      if (moved) {
-        this._startTouch = this._endTouch;
       }
     }
   }
 
-  private _onTouchEnd(_e: TouchEvent): void {
-    if (!this._startTouch || !this._endTouch) return;
+  private _onTouchEnd(e: TouchEvent): void {
+    const flip = this._inverted ? -1 : 1;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      const start = this._touches.get(t.identifier);
+      if (!start) continue;
 
-    const dx = this._endTouch.x - this._startTouch.x;
-    const dy = this._endTouch.y - this._startTouch.y;
-    const dist = Math.hypot(dx, dy);
+      const dx = (t.clientX - start.x) * flip;
+      const dy = (t.clientY - start.y) * flip;
+      const dist = Math.hypot(dx, dy);
 
-    if (dist > 40) {
-      if (Math.abs(dy) > Math.abs(dx)) {
-        if (dy > 0) {
-          this.input(GameInput.dropPiece);
+      if (dist > 40) {
+        if (Math.abs(dy) > Math.abs(dx)) {
+          if (dy > 0) {
+            this.input(GameInput.dropPiece);
+          }
         }
       }
+
+      this._touches.delete(t.identifier);
     }
   }
 }

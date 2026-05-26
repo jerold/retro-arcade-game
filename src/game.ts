@@ -2,9 +2,9 @@ import { GameInputController } from './game-input-controller';
 import { AIInput } from './game-input-controller';
 import { GameRenderer, NoopRenderer } from './game-renderer';
 import {
-  DEFAULT_GAME_TICK_MS, GameInput, MIN_TICK_MS, MS_INC,
-  boardWithLinesSquashed, boardWithPiece, emptyBoard, freshQueue,
-  initialX, initialY, isValid, lineClears, maxValidY, pieceIndexFromBag,
+  DEFAULT_GAME_TICK_MS, GameInput, MIN_TICK_MS, MS_INC, SeededBag,
+  boardWithLinesSquashed, boardWithPiece, emptyBoard,
+  initialX, initialY, isValid, lineClears, maxValidY,
   scoreForLines,
 } from './util';
 
@@ -12,8 +12,9 @@ export class Game {
   private _paused = false;
   private _tick_interval_ms = DEFAULT_GAME_TICK_MS;
 
+  private _bag: SeededBag;
   private _b = emptyBoard();
-  private _q = freshQueue();
+  private _q: number[];
   private _lineClears: number[] = [];
   private _score = 0;
   get score(): number { return this._score; }
@@ -33,7 +34,9 @@ export class Game {
   private _controller: GameInputController;
   private _tickTimer: number | null = null;
 
-  constructor(options?: { controller?: GameInputController; renderer?: GameRenderer }) {
+  constructor(options?: { controller?: GameInputController; renderer?: GameRenderer; bag?: SeededBag }) {
+    this._bag = options?.bag ?? new SeededBag();
+    this._q = this._bag.freshQueue();
     this._controller = options?.controller ?? new AIInput();
     this._controller.onInput((input) => this._handleInput(input));
 
@@ -60,7 +63,7 @@ export class Game {
     this._highScore = Math.max(this._score, this._highScore);
     this._score = 0;
     this._b = emptyBoard();
-    this._q = freshQueue();
+    this._q = this._bag.freshQueue();
     this._lineClears = [];
     this._resetPieceTransforms();
     this._controller.changeBoard(this._b, this._q);
@@ -126,7 +129,7 @@ export class Game {
   }
 
   private _enqueue(): void {
-    this._q.push(pieceIndexFromBag());
+    this._q.push(this._bag.next());
   }
 
   private _dequeue(): void {

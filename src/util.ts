@@ -45,21 +45,49 @@ export function scoreForLines(lineCount: number): number {
   return 0;
 }
 
-// used to generate new piece indexes in the queue
-let _bag: number[] = [];
+// mulberry32 seeded PRNG — returns a function yielding [0,1) floats
+function mulberry32(seed: number): () => number {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export class SeededBag {
+  private _bag: number[] = [];
+  private _rand: () => number;
+
+  constructor(seed?: number) {
+    this._rand = mulberry32(seed ?? (Math.random() * 0xFFFFFFFF));
+  }
+
+  next(): number {
+    if (this._bag.length === 0) {
+      this._bag = Array.from({ length: pieces.length }, (_, i) => i);
+    }
+    const bagIndex = Math.floor(this._rand() * this._bag.length);
+    const index = this._bag[bagIndex];
+    this._bag.splice(bagIndex, 1);
+    return index;
+  }
+
+  freshQueue(): number[] {
+    return Array.from({ length: 4 }, () => this.next());
+  }
+}
+
+// default global bag for single-player modes
+const _defaultBag = new SeededBag();
 
 export function pieceIndexFromBag(): number {
-  if (_bag.length === 0) {
-    _bag = Array.from({ length: pieces.length }, (_, i) => i);
-  }
-  const bagIndex = Math.floor(Math.random() * _bag.length);
-  const index = _bag[bagIndex];
-  _bag.splice(bagIndex, 1);
-  return index;
+  return _defaultBag.next();
 }
 
 export function freshQueue(): number[] {
-  return Array.from({ length: 4 }, () => pieceIndexFromBag());
+  return _defaultBag.freshQueue();
 }
 
 // assuming the board is valid with the piece at a given x find
